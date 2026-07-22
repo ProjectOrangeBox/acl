@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\models;
+namespace orange\acl\models;
 
 use PDO;
-use peels\model\Model;
+use orange\model\Model;
 use orange\framework\Application;
-use peels\acl\entities\RoleEntity;
-use peels\acl\interfaces\AclInterface;
-use peels\acl\interfaces\RoleModelInterface;
-use peels\acl\interfaces\RoleEntityInterface;
+use orange\acl\entities\RoleEntity;
+use orange\acl\interfaces\AclInterface;
+use orange\acl\interfaces\RoleModelInterface;
+use orange\acl\interfaces\RoleEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use peels\validate\interfaces\ValidateInterface;
-use peels\acl\exceptions\RecordNotFoundException;
-use peels\acl\interfaces\PermissionEntityInterface;
+use orange\validate\interfaces\ValidateInterface;
+use orange\acl\exceptions\RecordNotFoundException;
+use orange\acl\interfaces\PermissionEntityInterface;
 
 class RoleModel extends Model implements RoleModelInterface
 {
@@ -40,7 +40,7 @@ class RoleModel extends Model implements RoleModelInterface
     {
         $this->config = $config;
 
-        $this->entityClass = $this->config['RoleEntityClass'] ?? \peels\acl\entities\RoleEntity::class;
+        $this->entityClass = $this->config['RoleEntityClass'] ?? \orange\acl\entities\RoleEntity::class;
 
         $this->config['tablename'] = $this->tablename = $this->config['role table'];
 

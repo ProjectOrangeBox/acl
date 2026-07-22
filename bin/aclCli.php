@@ -3,9 +3,9 @@
 
 declare(strict_types=1);
 
-use peels\acl\Acl;
-use peels\acl\User;
-use peels\validate\exceptions\ValidationFailed;
+use orange\acl\Acl;
+use orange\acl\User;
+use orange\validate\exceptions\ValidationFailed;
 
 $container = require __DIR__.'/../../../../bootstrapCli.php';
 

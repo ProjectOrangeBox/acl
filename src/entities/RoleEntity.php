@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\entities;
+namespace orange\acl\entities;
 
-use peels\acl\interfaces\PermissionEntityInterface;
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\RoleModelInterface;
+use orange\acl\interfaces\PermissionEntityInterface;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\RoleModelInterface;
 
 class RoleEntity implements RoleEntityInterface
 {

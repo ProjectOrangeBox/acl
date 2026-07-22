@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace peels\acl;
+namespace orange\acl;
 
 use orange\framework\traits\ConfigurationTrait;
-use peels\session\SessionInterface;
-use peels\acl\interfaces\AclInterface;
-use peels\acl\interfaces\UserInterface;
-use peels\acl\interfaces\UserEntityInterface;
+use orange\session\SessionInterface;
+use orange\acl\interfaces\AclInterface;
+use orange\acl\interfaces\UserInterface;
+use orange\acl\interfaces\UserEntityInterface;
 use orange\framework\exceptions\MissingRequired;
 
 class User implements UserInterface

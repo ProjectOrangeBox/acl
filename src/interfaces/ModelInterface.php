@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\interfaces;
+namespace orange\acl\interfaces;
 
 interface ModelInterface
 {

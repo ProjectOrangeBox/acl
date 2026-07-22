@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\interfaces;
+namespace orange\acl\interfaces;
 
-use peels\acl\interfaces\PermissionModelInterface;
+use orange\acl\interfaces\PermissionModelInterface;
 
 interface PermissionEntityInterface
 {

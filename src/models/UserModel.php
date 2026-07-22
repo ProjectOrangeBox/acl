@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\models;
+namespace orange\acl\models;
 
 use PDO;
-use peels\model\Crud;
-use peels\model\Model;
+use orange\model\Crud;
+use orange\model\Model;
 use orange\framework\Application;
-use peels\acl\entities\UserEntity;
-use peels\acl\models\UserMetaModel;
-use peels\acl\interfaces\AclInterface;
-use peels\acl\interfaces\UserModelInterface;
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\UserEntityInterface;
+use orange\acl\entities\UserEntity;
+use orange\acl\models\UserMetaModel;
+use orange\acl\interfaces\AclInterface;
+use orange\acl\interfaces\UserModelInterface;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\UserEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use peels\validate\exceptions\ValidationFailed;
-use peels\validate\interfaces\ValidateInterface;
-use peels\acl\exceptions\RecordNotFoundException;
+use orange\validate\exceptions\ValidationFailed;
+use orange\validate\interfaces\ValidateInterface;
+use orange\acl\exceptions\RecordNotFoundException;
 
 class UserModel extends Model implements UserModelInterface
 {
@@ -45,7 +45,7 @@ class UserModel extends Model implements UserModelInterface
     {
         $this->config =$config;
 
-        $this->entityClass = $this->config['UserEntityClass'] ?? \peels\acl\entities\UserEntity::class;
+        $this->entityClass = $this->config['UserEntityClass'] ?? \orange\acl\entities\UserEntity::class;
 
         $this->config['tablename'] = $this->tablename = $this->config['user table'];
 

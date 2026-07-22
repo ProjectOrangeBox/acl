@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace peels\acl;
+namespace orange\acl;
 
 use PDO;
-use peels\acl\models\RoleModel;
-use peels\acl\models\UserModel;
+use orange\acl\models\RoleModel;
+use orange\acl\models\UserModel;
 use orange\framework\Application;
 use orange\framework\base\Singleton;
-use peels\acl\models\PermissionModel;
-use peels\acl\interfaces\AclInterface;
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\UserEntityInterface;
+use orange\acl\models\PermissionModel;
+use orange\acl\interfaces\AclInterface;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\UserEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use peels\validate\interfaces\ValidateInterface;
-use peels\acl\interfaces\PermissionEntityInterface;
+use orange\validate\interfaces\ValidateInterface;
+use orange\acl\interfaces\PermissionEntityInterface;
 
 class Acl extends Singleton implements AclInterface
 {

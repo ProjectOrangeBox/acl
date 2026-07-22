@@ -12,7 +12,7 @@ return [
     'admin role' => 1,
     'everyone role' => 2,
     'sessionKey' => '##user##session##',
-    'userModel' => \peels\acl\models\UserModel::class,
-    'roleModel' => \peels\acl\models\RoleModel::class,
-    'permissionModel' => \peels\acl\models\PermissionModel::class,
+    'userModel' => \orange\acl\models\UserModel::class,
+    'roleModel' => \orange\acl\models\RoleModel::class,
+    'permissionModel' => \orange\acl\models\PermissionModel::class,
 ];

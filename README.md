@@ -5,8 +5,8 @@ An Access Control List service: users, roles, and permissions backed by PDO, wit
 ## Example
 
 ```php
-use peels\acl\Acl;
-use peels\acl\User;
+use orange\acl\Acl;
+use orange\acl\User;
 
 $acl = Acl::getInstance($config, $pdo, $validate); // config merges over acl/src/config/acl.php
 
@@ -24,4 +24,4 @@ $currentUser->change($user->id);           // log in
 $currentUser->logout();                    // back to the guest user
 ```
 
-`Acl` and `User` are both singletons — configure the underlying `userModel`/`roleModel`/`permissionModel` classes and table names via `acl/src/config/acl.php`, and the guest user id via `acl/src/config/user.php`. Entities (`UserEntity`, `RoleEntity`, `PermissionEntity`) and models throw `RecordNotFoundException` when a lookup fails, and `ValidationFailed` (from [`peels/validate`](../validate/README.md)) when `create()` input doesn't pass the configured rules.
+`Acl` and `User` are both singletons — configure the underlying `userModel`/`roleModel`/`permissionModel` classes and table names via `acl/src/config/acl.php`, and the guest user id via `acl/src/config/user.php`. Entities (`UserEntity`, `RoleEntity`, `PermissionEntity`) and models throw `RecordNotFoundException` when a lookup fails, and `ValidationFailed` (from [`orange/validate`](../validate/README.md)) when `create()` input doesn't pass the configured rules.

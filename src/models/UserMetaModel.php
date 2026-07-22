@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\models;
+namespace orange\acl\models;
 
 use PDO;
-use peels\model\Model;
-use peels\acl\interfaces\ModelInterface;
-use peels\validate\interfaces\ValidateInterface;
-use peels\acl\exceptions\RecordNotFoundException;
+use orange\model\Model;
+use orange\acl\interfaces\ModelInterface;
+use orange\validate\interfaces\ValidateInterface;
+use orange\acl\exceptions\RecordNotFoundException;
 
 /**
  * Add all of the extra fluff data a user might have

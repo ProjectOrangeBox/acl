@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\models;
+namespace orange\acl\models;
 
 use PDO;
-use peels\model\Model;
-use peels\validate\interfaces\ValidateInterface;
-use peels\acl\exceptions\RecordNotFoundException;
-use peels\acl\interfaces\PermissionModelInterface;
-use peels\acl\interfaces\PermissionEntityInterface;
+use orange\model\Model;
+use orange\validate\interfaces\ValidateInterface;
+use orange\acl\exceptions\RecordNotFoundException;
+use orange\acl\interfaces\PermissionModelInterface;
+use orange\acl\interfaces\PermissionEntityInterface;
 
 class PermissionModel extends Model implements PermissionModelInterface
 {
@@ -28,7 +28,7 @@ class PermissionModel extends Model implements PermissionModelInterface
 
     public function __construct(array $config, PDO $pdo, ?ValidateInterface $validateService)
     {
-        $this->entityClass = $config['PermissionEntityClass'] ?? \peels\acl\entities\PermissionEntity::class;
+        $this->entityClass = $config['PermissionEntityClass'] ?? \orange\acl\entities\PermissionEntity::class;
 
         $config['tablename'] = $this->tablename = $config['permission table'];
 

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\entities;
+namespace orange\acl\entities;
 
 use Exception;
-use peels\acl\interfaces\UserModelInterface;
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\UserEntityInterface;
+use orange\acl\interfaces\UserModelInterface;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\UserEntityInterface;
 
 class UserEntity implements UserEntityInterface
 {

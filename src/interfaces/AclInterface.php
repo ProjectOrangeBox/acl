@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\interfaces;
+namespace orange\acl\interfaces;
 
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\UserEntityInterface;
-use peels\acl\interfaces\PermissionEntityInterface;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\UserEntityInterface;
+use orange\acl\interfaces\PermissionEntityInterface;
 
 interface AclInterface
 {

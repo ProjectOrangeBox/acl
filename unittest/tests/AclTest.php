@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-use peels\acl\Acl;
-use peels\validate\Validate;
-use peels\acl\models\UserModel;
-use peels\acl\models\RoleModel;
-use peels\acl\interfaces\AclInterface;
-use peels\acl\models\PermissionModel;
-use peels\acl\interfaces\RoleEntityInterface;
-use peels\acl\interfaces\UserEntityInterface;
-use peels\validate\exceptions\ValidationFailed;
-use peels\acl\exceptions\RecordNotFoundException;
-use peels\acl\interfaces\PermissionEntityInterface;
+use orange\acl\Acl;
+use orange\validate\Validate;
+use orange\acl\models\UserModel;
+use orange\acl\models\RoleModel;
+use orange\acl\interfaces\AclInterface;
+use orange\acl\models\PermissionModel;
+use orange\acl\interfaces\RoleEntityInterface;
+use orange\acl\interfaces\UserEntityInterface;
+use orange\validate\exceptions\ValidationFailed;
+use orange\acl\exceptions\RecordNotFoundException;
+use orange\acl\interfaces\PermissionEntityInterface;
 
 final class AclTest extends unitTestHelper
 {

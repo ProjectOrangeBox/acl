@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace peels\acl\exceptions;
+namespace orange\acl\exceptions;
 
 use Exception;
 
