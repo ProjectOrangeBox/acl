@@ -8,7 +8,6 @@ use PDO;
 use orange\model\Model;
 use orange\acl\interfaces\ModelInterface;
 use orange\validate\interfaces\ValidateInterface;
-use orange\acl\exceptions\RecordNotFoundException;
 
 /**
  * Add all of the extra fluff data a user might have
@@ -44,48 +43,61 @@ class UserMetaModel extends Model implements ModelInterface
 
     public function create(array $columns): int
     {
-        // throws an exception
-        $this->validateFields('create', $columns);
+        // throws on failure; returns only the validated whitelisted columns
+        $fields = (array)$this->validateFields('create', $columns);
 
-        // the caller (UserModel) hands us a copy of its own full column set, not
-        // just ours - only pass through columns this table actually has
-        $columns = array_intersect_key($columns, array_flip(['id', 'dashboard_url', 'phone', 'ext']));
+        // the row shares its primary key with the user row - assigned by the
+        // caller (UserModel) after the user insert, so it rides along outside
+        // the create ruleset
+        $fields['id'] = (int)$columns['id'];
 
-        return $this->sql->insert()->into($this->tablename)->values($columns)->execute()->lastInsertId();
+        return (int)$this->sql->insert()->into($this->tablename)->values($fields)->execute()->lastInsertId();
     }
 
     public function update(array $columns): bool
     {
-        // throws an exception
-        $this->validateFields('update', $columns);
+        // throws on failure; returns only the validated whitelisted columns
+        $fields = (array)$this->validateFields('update', $columns);
 
-        // the caller (UserModel) hands us a copy of its own full column set, not
-        // just ours - only pass through columns this table actually has
-        $columns = array_intersect_key($columns, array_flip(['id', 'dashboard_url', 'phone', 'ext']));
+        // the primary key targets the WHERE - it is never a SET column
+        $id = (int)$fields['id'];
+        unset($fields['id']);
 
-        $this->sql->update($this->tablename)->set($columns)->where('id', '=', $columns['id'])->execute();
+        // no meta fields provided (the caller only had user columns) -
+        // nothing to update, and an empty SET isn't valid SQL
+        if ($fields === []) {
+            return false;
+        }
 
-        return true;
+        $this->sql->update($this->tablename)->set($fields)->where('id', '=', $id)->execute();
+
+        return $this->sql->rowCount() > 0;
     }
 
+    /**
+     * Hard delete - the meta table carries no soft-delete flag; the user
+     * row's own is_deleted covers the pair.
+     */
     public function delete(int $id): bool
     {
         // throws an exception
         $this->validateFields('delete', ['id' => $id]);
 
-        $this->sql->update($this->tablename)->set(['is_deleted' => 0])->where('id', '=', $id)->execute();
+        $this->sql->delete()->from($this->tablename)->where('id', '=', $id)->execute();
 
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
+    /**
+     * A user without a meta row (seeded outside createUser(), say) is not an
+     * error - meta is optional by design, so absence reads as [].
+     */
     public function read(int $id): array
     {
-        if ($this->sql->select()->from($this->tablename)->where('id', '=', $id)->execute()->rowCount() > 0) {
-            $array = $this->sql->row();
-        } else {
-            throw new RecordNotFoundException('User Meta Record ' . $id);
-        }
+        // rowCount() after a SELECT isn't reliable across PDO drivers - check
+        // the fetched row itself instead
+        $row = $this->sql->select()->from($this->tablename)->where('id', '=', $id)->execute()->row();
 
-        return $array;
+        return is_array($row) ? $row : [];
     }
 }

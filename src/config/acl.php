@@ -8,10 +8,11 @@ return [
     'role permission table' => 'orange_role_permission',
     'user meta table' => 'orange_user_meta',
     'admin user' => 1,
+    // must match 'guest user' in user.php - entities use it for
+    // loggedIn()/isGuest() checks
     'guest user' => 2,
     'admin role' => 1,
     'everyone role' => 2,
-    'sessionKey' => '##user##session##',
     'userModel' => \orange\acl\models\UserModel::class,
     'roleModel' => \orange\acl\models\RoleModel::class,
     'permissionModel' => \orange\acl\models\PermissionModel::class,

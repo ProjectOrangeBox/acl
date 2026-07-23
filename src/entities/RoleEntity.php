@@ -20,8 +20,8 @@ class RoleEntity implements RoleEntityInterface
     public string $description;
     // migration which added the role
     public readonly ?string $migration;
-    // if the permission is active or not
-    public readonly string $is_active;
+    // if the role is active or not
+    public readonly int $is_active;
 
     public function __construct(array $config, RoleModelInterface $roleModel)
     {
@@ -37,14 +37,14 @@ class RoleEntity implements RoleEntityInterface
         return $this->roleModel->update($columns);
     }
 
-    public function deactive(): bool
+    public function deactivate(): bool
     {
-        return $this->roleModel->deactive($this->id);
+        return $this->roleModel->deactivate($this->id);
     }
 
-    public function active(): bool
+    public function activate(): bool
     {
-        return $this->roleModel->active($this->id);
+        return $this->roleModel->activate($this->id);
     }
 
     public function addPermission(int|string|PermissionEntityInterface $arg): bool

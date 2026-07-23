@@ -2,6 +2,13 @@
     "name": "orange/acl",
     "description": "ACL service plus session-aware user helper for roles, permissions, and access control.",
     "type": "library",
+    "keywords": [
+        "acl",
+        "access-control",
+        "roles",
+        "permissions",
+        "authorization"
+    ],
     "homepage": "https://github.com/ProjectOrangeBox/acl",
     "license": "MIT",
     "authors": [
@@ -28,6 +35,12 @@
         "psr-4": {
             "orange\\acl\\": "src/"
         }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "scripts-descriptions": {
+        "test": "Run the PHPUnit test suite"
     },
     "minimum-stability": "dev",
     "prefer-stable": true

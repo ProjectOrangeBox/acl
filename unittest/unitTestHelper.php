@@ -35,7 +35,7 @@ class unitTestHelper extends TestCase
         $closure($value);
     }
 
-    protected function callMethod(string $method, array $args = null, $instance = null)
+    protected function callMethod(string $method, ?array $args = null, $instance = null)
     {
         $instance = ($instance) ?? $this->instance;
 

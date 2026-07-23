@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace orange\acl\models;
 
 use PDO;
+use Throwable;
 use orange\model\Model;
-use orange\framework\Application;
 use orange\acl\entities\RoleEntity;
 use orange\acl\interfaces\AclInterface;
 use orange\acl\interfaces\RoleModelInterface;
@@ -20,7 +20,13 @@ class RoleModel extends Model implements RoleModelInterface
 {
     use ConfigurationTrait;
 
+    // wired by Acl::__construct so string permission arguments can be resolved
     public AclInterface $acl;
+
+    // the full merged acl config - Model's own constructor slims $this->config
+    // down to the sql-related keys, discarding the acl table names and the
+    // guest/admin ids the entities need
+    protected array $aclConfig = [];
 
     protected string $tableJoin;
 
@@ -31,73 +37,93 @@ class RoleModel extends Model implements RoleModelInterface
         'is_active' => ['ifEmpty[1]|isOneOf[0,1]', 'Is Active'],
     ];
     protected array $ruleSets = [
-        'create' => ['name', 'description'],
-        'update' => ['id', 'name', 'description'],
+        'create' => ['name', 'description', 'is_active'],
+        'update' => ['id', 'name', 'description', 'is_active'],
         'delete' => ['id'],
     ];
 
-    public function __construct(array $config, PDO $pdo, ?ValidateInterface $validateService)
+    public function __construct(array $config, PDO $pdo, ValidateInterface $validateService)
     {
-        $this->config = $config;
+        $this->aclConfig = $config;
 
-        $this->entityClass = $this->config['RoleEntityClass'] ?? \orange\acl\entities\RoleEntity::class;
+        $this->entityClass = $config['RoleEntityClass'] ?? RoleEntity::class;
 
-        $this->config['tablename'] = $this->tablename = $this->config['role table'];
+        $config['tablename'] = $this->tablename = $this->aclConfig['role table'];
 
         $this->rules['name'][0] = sprintf($this->rules['name'][0], $this->tablename);
 
-        $this->tableJoin = $this->config['role permission table'];
+        $this->tableJoin = $this->aclConfig['role permission table'];
 
         $validateService->throwExceptionOnFailure(true);
 
-        parent::__construct($this->config, $pdo, $validateService);
+        parent::__construct($config, $pdo, $validateService);
 
         $this->sql->throwExceptions(true);
     }
 
     public function create(array $columns): RoleEntityInterface
     {
-        // throws an exception
-        $this->validateFields('create', $columns);
+        // validateFields() throws on failure and returns only the validated,
+        // whitelisted columns - nothing else reaches the insert
+        $columns = (array)$this->validateFields('create', $columns);
 
         $pid = $this->sql->insert()->into($this->tablename)->values($columns)->execute()->lastInsertId();
 
-        return $this->read($pid);
+        return $this->read((int)$pid);
     }
 
     public function update(array $columns): bool
     {
-        // throws an exception
-        $this->validateFields('update', $columns);
+        // throws an exception on failure; returns the validated whitelist
+        $columns = (array)$this->validateFields('update', $columns);
 
-        $this->sql->update($this->tablename)->set($columns)->where('id', '=', $columns['id'])->execute();
+        // the primary key targets the WHERE - it is never a SET column
+        $id = (int)$columns['id'];
+        unset($columns['id']);
 
-        return true;
+        $this->sql->update($this->tablename)->set($columns)->where('id', '=', $id)->execute();
+
+        return $this->sql->rowCount() > 0;
     }
 
+    /**
+     * Hard delete - removes the role and every reference to it in the
+     * permission and user join tables, atomically.
+     */
     public function delete(int $id): bool
     {
         // throws an exception
         $this->validateFields('delete', ['id' => $id]);
 
-        $this->sql->delete()->from($this->tablename)->where('id', '=', $id)->execute();
-        $this->sql->delete()->from($this->tableJoin)->where('role_id', '=', $id)->execute();
+        $this->pdo->beginTransaction();
+
+        try {
+            $this->sql->delete()->from($this->tablename)->where('id', '=', $id)->execute();
+            $this->sql->delete()->from($this->tableJoin)->where('role_id', '=', $id)->execute();
+            $this->sql->delete()->from($this->aclConfig['user role table'])->where('role_id', '=', $id)->execute();
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+
+            throw $e;
+        }
 
         return true;
     }
 
-    public function deactive(int $id): bool
+    public function deactivate(int $id): bool
     {
         $this->sql->update($this->tablename)->set(['is_active' => 0])->where('id', '=', $id)->execute();
 
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
-    public function active(int $id): bool
+    public function activate(int $id): bool
     {
         $this->sql->update($this->tablename)->set(['is_active' => 1])->where('id', '=', $id)->execute();
 
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
     public function read(string|int $key): RoleEntityInterface
@@ -106,7 +132,7 @@ class RoleModel extends Model implements RoleModelInterface
 
         // rowCount() after a SELECT isn't reliable across PDO drivers (e.g. always 0 on
         // sqlite) - check the fetched row itself instead
-        $roleEntity = $this->sql->setFetchMode($this->entityClass, [$this->config, $this])->select()->from($this->tablename)->where($column, '=', $key)->execute()->row();
+        $roleEntity = $this->sql->setFetchMode($this->entityClass, [$this->aclConfig, $this])->select()->from($this->tablename)->where($column, '=', $key)->execute()->row();
 
         if ($roleEntity === false) {
             throw new RecordNotFoundException('Role Record ' . $key);
@@ -117,64 +143,70 @@ class RoleModel extends Model implements RoleModelInterface
 
     public function readAll(): array
     {
-        return $this->sql->select()->from($this->tablename)->execute()->rows();
+        // the fetch mode set by read() persists on the Sql instance - reset
+        // it so readAll() always returns plain rows, not entities
+        return $this->sql->setFetchMode(PDO::FETCH_ASSOC)->select()->from($this->tablename)->execute()->rows();
     }
 
     public function addPermission(int $roleId, int|string|PermissionEntityInterface $arg): bool
     {
-        if (is_string($arg)) {
-            $permissionEntity = $this->acl->getRole($arg);
-            $permissionId = (int)$permissionEntity->id;
-        } elseif (is_object($arg)) {
-            $permissionId = $arg->id;
-        } else {
-            $permissionId = $arg;
-        }
+        $this->sql->insert()->into($this->tableJoin)->values(['role_id' => $roleId, 'permission_id' => $this->resolvePermissionId($arg)])->execute();
 
-        $this->sql->insert()->into($this->tableJoin)->values(['role_id' => $roleId, 'permission_id' => $permissionId])->execute();
-
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
     public function removePermission(int $roleId, int|string|PermissionEntityInterface $arg): bool
     {
-        if (is_string($arg)) {
-            $permissionEntity = $this->acl->getRole($arg);
-            $permissionId = (int)$permissionEntity->id;
-        } elseif (is_object($arg)) {
-            $permissionId = $arg->id;
-        } else {
-            $permissionId = $arg;
-        }
+        $this->sql->delete($this->tableJoin)->where('role_id', '=', $roleId)->and()->where('permission_id', '=', $this->resolvePermissionId($arg))->execute();
 
-        $this->sql->delete($this->tableJoin)->where('role_id', '=', $roleId)->and()->where('permission_id', '=', $permissionId)->execute();
-
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
-    public function removeAllPermissions(int $userId): bool
+    public function removeAllPermissions(int $roleId): bool
     {
-        $this->sql->delete()->from($this->tableJoin)->where('user_id', '=', $userId)->execute();
+        $this->sql->delete()->from($this->tableJoin)->where('role_id', '=', $roleId)->execute();
 
-        return true;
+        return $this->sql->rowCount() > 0;
     }
 
+    /**
+     * Replace the role's permissions with exactly $permissionIds - atomically;
+     * a failure rolls the whole relink back and rethrows.
+     */
     public function relink(int $roleId, array $permissionIds): bool
     {
-        $this->sql->pdo->beginTransaction();
+        $this->pdo->beginTransaction();
 
-        $this->removeAllPermissions($roleId);
+        try {
+            $this->removeAllPermissions($roleId);
 
-        foreach ($permissionIds as $permissionId) {
-            $this->addPermission($roleId, $permissionId);
+            foreach ($permissionIds as $permissionId) {
+                $this->addPermission($roleId, $permissionId);
+            }
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+
+            throw $e;
         }
 
-        if ($this->sql->hasError()) {
-            $this->sql->pdo->rollBack();
-        } else {
-            $this->sql->pdo->commit();
+        return true;
+    }
+
+    /**
+     * Resolves a permission key, entity, or id to the permission id.
+     */
+    protected function resolvePermissionId(int|string|PermissionEntityInterface $arg): int
+    {
+        if (is_string($arg)) {
+            return (int)$this->acl->getPermission($arg)->id;
         }
 
-        return $this->sql->hasError();
+        if ($arg instanceof PermissionEntityInterface) {
+            return (int)$arg->id;
+        }
+
+        return $arg;
     }
 }

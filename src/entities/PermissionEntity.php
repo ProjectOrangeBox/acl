@@ -22,7 +22,7 @@ class PermissionEntity implements PermissionEntityInterface
     // migration which added the permission
     public readonly ?string $migration;
     // if the permission is active or not
-    public readonly string $is_active;
+    public readonly int $is_active;
 
     public function __construct(array $config, PermissionModelInterface $permissionModel)
     {
@@ -38,13 +38,13 @@ class PermissionEntity implements PermissionEntityInterface
         return $this->permissionModel->update($columns);
     }
 
-    public function deactive(): bool
+    public function deactivate(): bool
     {
-        return $this->permissionModel->deactive($this->id);
+        return $this->permissionModel->deactivate($this->id);
     }
 
-    public function active(): bool
+    public function activate(): bool
     {
-        return $this->permissionModel->active($this->id);
+        return $this->permissionModel->activate($this->id);
     }
 }

@@ -19,7 +19,7 @@ class UserEntity implements UserEntityInterface
     public string $username;
     // users email
     public string $email;
-    // if the permission is active or not
+    // if the user is active or not
     public readonly int $is_active;
     // soft delete user
     public readonly int $is_deleted;
@@ -52,14 +52,14 @@ class UserEntity implements UserEntityInterface
         return $this->userModel->updatePassword($this->id, $newPassword);
     }
 
-    public function deactive(): bool
+    public function deactivate(): bool
     {
-        return $this->userModel->deactive($this->id);
+        return $this->userModel->deactivate($this->id);
     }
 
-    public function active(): bool
+    public function activate(): bool
     {
-        return $this->userModel->active($this->id);
+        return $this->userModel->activate($this->id);
     }
 
     public function addRole(string|int|RoleEntityInterface $arg): bool
@@ -85,11 +85,18 @@ class UserEntity implements UserEntityInterface
         return (in_array($permission, $this->permissions, true));
     }
 
-    public function hasRole(int $role): bool
+    /**
+     * By role id or role name - roles are held as [id => name].
+     */
+    public function hasRole(int|string $role): bool
     {
         $this->lazyLoad();
 
-        return array_key_exists($role, $this->roles);
+        if (is_int($role)) {
+            return array_key_exists($role, $this->roles);
+        }
+
+        return in_array($role, $this->roles, true);
     }
 
     public function hasRoles(array $roles): bool
@@ -105,7 +112,7 @@ class UserEntity implements UserEntityInterface
 
     public function hasOneRoleOf(array $roles): bool
     {
-        foreach ((array) $roles as $r) {
+        foreach ($roles as $r) {
             if ($this->hasRole($r)) {
                 return true;
             }
@@ -153,7 +160,7 @@ class UserEntity implements UserEntityInterface
 
     public function isAdmin(): bool
     {
-        return $this->hasRole($this->config['admin role']);
+        return $this->hasRole((int)$this->config['admin role']);
     }
 
     public function isGuest(): bool
@@ -164,6 +171,14 @@ class UserEntity implements UserEntityInterface
     // meta
     public function __set(string $name, mixed $value): void
     {
+        // meta must be loaded before we can know whether $name is a meta
+        // field - but during PDO's FETCH_CLASS property assignment the
+        // constructor hasn't run yet, so there is no model to load through;
+        // an unknown DB column then correctly reads as an unknown property
+        if (isset($this->userModel)) {
+            $this->lazyLoad();
+        }
+
         if (array_key_exists($name, $this->meta)) {
             $this->meta[$name] = $value;
         } else {
