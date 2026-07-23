@@ -24,18 +24,12 @@ class User extends Singleton implements UserInterface
 
     protected array $config = [];
 
-    protected AclInterface $acl;
-    protected SessionInterface $sessionService;
-
     protected string $sessionKey;
     protected int $guestUserId;
 
-    protected function __construct(array $config, AclInterface $acl, SessionInterface $sessionService)
+    protected function __construct(array $config, protected AclInterface $acl, protected SessionInterface $sessionService)
     {
         $this->config = $this->mergeConfigWith($config);
-
-        $this->acl = $acl;
-        $this->sessionService = $sessionService;
 
         // required value
         if (!isset($this->config['guest user']) || !is_int($this->config['guest user'])) {

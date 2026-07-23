@@ -10,9 +10,6 @@ use orange\acl\interfaces\RoleModelInterface;
 
 class RoleEntity implements RoleEntityInterface
 {
-    protected RoleModelInterface $roleModel;
-    protected array $config = [];
-
     public readonly int $id;
     // short name of role
     public string $name;
@@ -23,10 +20,8 @@ class RoleEntity implements RoleEntityInterface
     // if the role is active or not
     public readonly int $is_active;
 
-    public function __construct(array $config, RoleModelInterface $roleModel)
+    public function __construct(protected array $config, protected RoleModelInterface $roleModel)
     {
-        $this->config = $config;
-        $this->roleModel = $roleModel;
     }
 
     public function update(): bool

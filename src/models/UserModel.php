@@ -24,11 +24,6 @@ class UserModel extends Model implements UserModelInterface
     // wired by Acl::__construct so string role arguments can be resolved
     public AclInterface $acl;
 
-    // the full merged acl config - Model's own constructor slims $this->config
-    // down to the sql-related keys, discarding the acl table names and the
-    // guest/admin ids the entities need
-    protected array $aclConfig = [];
-
     protected UserMetaModel $userMetaModel;
     protected string $tableJoin;
 
@@ -49,13 +44,11 @@ class UserModel extends Model implements UserModelInterface
         'password' => ['password'],
     ];
 
-    public function __construct(array $config, PDO $pdo, ValidateInterface $validateService)
+    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
     {
-        $this->aclConfig = $config;
+        $this->entityClass = $this->aclConfig['UserEntityClass'] ?? UserEntity::class;
 
-        $this->entityClass = $config['UserEntityClass'] ?? UserEntity::class;
-
-        $config['tablename'] = $this->tablename = $config['user table'];
+        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['user table'];
 
         $this->rules['username'][0] = sprintf($this->rules['username'][0], $this->tablename);
         $this->rules['email'][0] = sprintf($this->rules['email'][0], $this->tablename);
@@ -67,7 +60,7 @@ class UserModel extends Model implements UserModelInterface
 
         $validateService->throwExceptionOnFailure(true);
 
-        parent::__construct($config, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo, $validateService);
 
         $this->sql->throwExceptions(true);
     }

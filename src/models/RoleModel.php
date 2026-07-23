@@ -23,11 +23,6 @@ class RoleModel extends Model implements RoleModelInterface
     // wired by Acl::__construct so string permission arguments can be resolved
     public AclInterface $acl;
 
-    // the full merged acl config - Model's own constructor slims $this->config
-    // down to the sql-related keys, discarding the acl table names and the
-    // guest/admin ids the entities need
-    protected array $aclConfig = [];
-
     protected string $tableJoin;
 
     protected array $rules = [
@@ -42,13 +37,11 @@ class RoleModel extends Model implements RoleModelInterface
         'delete' => ['id'],
     ];
 
-    public function __construct(array $config, PDO $pdo, ValidateInterface $validateService)
+    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
     {
-        $this->aclConfig = $config;
+        $this->entityClass = $this->aclConfig['RoleEntityClass'] ?? RoleEntity::class;
 
-        $this->entityClass = $config['RoleEntityClass'] ?? RoleEntity::class;
-
-        $config['tablename'] = $this->tablename = $this->aclConfig['role table'];
+        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['role table'];
 
         $this->rules['name'][0] = sprintf($this->rules['name'][0], $this->tablename);
 
@@ -56,7 +49,7 @@ class RoleModel extends Model implements RoleModelInterface
 
         $validateService->throwExceptionOnFailure(true);
 
-        parent::__construct($config, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo, $validateService);
 
         $this->sql->throwExceptions(true);
     }

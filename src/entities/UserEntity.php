@@ -11,9 +11,6 @@ use orange\acl\interfaces\UserEntityInterface;
 
 class UserEntity implements UserEntityInterface
 {
-    protected UserModelInterface $userModel;
-    protected array $config = [];
-
     public readonly int $id;
     // users name
     public string $username;
@@ -32,10 +29,8 @@ class UserEntity implements UserEntityInterface
 
     protected bool $lazyLoaded = false;
 
-    public function __construct(array $config, UserModelInterface $userModel)
+    public function __construct(protected array $config, protected UserModelInterface $userModel)
     {
-        $this->config = $config;
-        $this->userModel = $userModel;
     }
 
     public function update(): bool
@@ -101,46 +96,22 @@ class UserEntity implements UserEntityInterface
 
     public function hasRoles(array $roles): bool
     {
-        foreach ($roles as $r) {
-            if (!$this->hasRole($r)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($roles, fn($r) => $this->hasRole($r));
     }
 
     public function hasOneRoleOf(array $roles): bool
     {
-        foreach ($roles as $r) {
-            if ($this->hasRole($r)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($roles, fn($r) => $this->hasRole($r));
     }
 
     public function hasPermissions(array $permissions): bool
     {
-        foreach ($permissions as $p) {
-            if ($this->cannot($p)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($permissions, fn($p) => !$this->cannot($p));
     }
 
     public function hasOnePermissionOf(array $permissions): bool
     {
-        foreach ($permissions as $p) {
-            if ($this->can($p)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($permissions, fn($p) => $this->can($p));
     }
 
     public function hasPermission(string $permission): bool
@@ -182,7 +153,7 @@ class UserEntity implements UserEntityInterface
         if (array_key_exists($name, $this->meta)) {
             $this->meta[$name] = $value;
         } else {
-            throw new Exception('Unknown property "' . __CLASS__ . '::$' . $name . '".');
+            throw new Exception('Unknown property "' . self::class . '::$' . $name . '".');
         }
     }
 
@@ -194,22 +165,13 @@ class UserEntity implements UserEntityInterface
         if (array_key_exists($name, $this->meta)) {
             $return = $this->meta[$name];
         } else {
-            switch (strtolower($name)) {
-                case 'loggedin':
-                    $return = $this->loggedIn();
-                    break;
-                case 'isadmin':
-                    $return = $this->isAdmin();
-                    break;
-                case 'isguest':
-                    $return = $this->isGuest();
-                    break;
-                case 'isactive':
-                    $return = ($this->is_active == 1);
-                    break;
-                default:
-                    throw new Exception('Undefined property "' . __CLASS__ . '::$' . $name . '".');
-            }
+            $return = match (strtolower($name)) {
+                'loggedin' => $this->loggedIn(),
+                'isadmin' => $this->isAdmin(),
+                'isguest' => $this->isGuest(),
+                'isactive' => $this->is_active == 1,
+                default => throw new Exception('Undefined property "' . self::class . '::$' . $name . '".'),
+            };
         }
 
         return $return;

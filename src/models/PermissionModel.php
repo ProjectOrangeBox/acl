@@ -15,10 +15,6 @@ use orange\acl\interfaces\PermissionEntityInterface;
 
 class PermissionModel extends Model implements PermissionModelInterface
 {
-    // the full merged acl config - Model's own constructor slims $this->config
-    // down to the sql-related keys
-    protected array $aclConfig = [];
-
     protected string $tableJoin;
 
     protected array $rules = [
@@ -34,21 +30,19 @@ class PermissionModel extends Model implements PermissionModelInterface
         'delete' => ['id'],
     ];
 
-    public function __construct(array $config, PDO $pdo, ValidateInterface $validateService)
+    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
     {
-        $this->aclConfig = $config;
+        $this->entityClass = $this->aclConfig['PermissionEntityClass'] ?? PermissionEntity::class;
 
-        $this->entityClass = $config['PermissionEntityClass'] ?? PermissionEntity::class;
-
-        $config['tablename'] = $this->tablename = $config['permission table'];
+        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['permission table'];
 
         $this->rules['key'][0] = sprintf($this->rules['key'][0], $this->tablename);
 
-        $this->tableJoin = $config['role permission table'];
+        $this->tableJoin = $this->aclConfig['role permission table'];
 
         $validateService->throwExceptionOnFailure(true);
 
-        parent::__construct($config, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo, $validateService);
 
         $this->sql->throwExceptions(true);
     }

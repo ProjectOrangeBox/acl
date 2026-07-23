@@ -9,9 +9,6 @@ use orange\acl\interfaces\PermissionModelInterface;
 
 class PermissionEntity implements PermissionEntityInterface
 {
-    protected PermissionModelInterface $permissionModel;
-    protected array $config = [];
-
     public readonly int $id;
     // unique key identifying the permission
     public string $key;
@@ -24,10 +21,8 @@ class PermissionEntity implements PermissionEntityInterface
     // if the permission is active or not
     public readonly int $is_active;
 
-    public function __construct(array $config, PermissionModelInterface $permissionModel)
+    public function __construct(protected array $config, protected PermissionModelInterface $permissionModel)
     {
-        $this->config = $config;
-        $this->permissionModel = $permissionModel;
     }
 
     public function update(): bool
