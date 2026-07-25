@@ -81,7 +81,9 @@ class User extends Singleton implements UserInterface
     /* session */
     protected function retrieve(): int
     {
-        $sessionUserId = (int)$this->sessionService->get($this->sessionKey, 0);
+        // session get() takes no default - an unset key returns null, which
+        // casts to 0 and falls through to the guest id below
+        $sessionUserId = (int)$this->sessionService->get($this->sessionKey);
 
         // anything that isn't a positive user id falls back to guest
         return $sessionUserId > 0 ? $sessionUserId : $this->guestUserId;

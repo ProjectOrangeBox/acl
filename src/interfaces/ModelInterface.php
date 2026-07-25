@@ -10,4 +10,4 @@ interface ModelInterface
     public function read(int $id): array;
     public function update(array $columns): bool;
     public function delete(int $id): bool;
-} /* end interface */
+}

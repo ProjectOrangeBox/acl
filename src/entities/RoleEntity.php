@@ -10,15 +10,15 @@ use orange\acl\interfaces\RoleModelInterface;
 
 class RoleEntity implements RoleEntityInterface
 {
-    public readonly int $id;
+    public protected(set) int $id;
     // short name of role
     public string $name;
     // description of role
     public string $description;
     // migration which added the role
-    public readonly ?string $migration;
+    public protected(set) ?string $migration = null;
     // if the role is active or not
-    public readonly int $is_active;
+    public protected(set) int $is_active;
 
     public function __construct(protected array $config, protected RoleModelInterface $roleModel)
     {

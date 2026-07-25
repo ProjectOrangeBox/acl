@@ -9,7 +9,7 @@ use orange\acl\interfaces\PermissionModelInterface;
 
 class PermissionEntity implements PermissionEntityInterface
 {
-    public readonly int $id;
+    public protected(set) int $id;
     // unique key identifying the permission
     public string $key;
     // human readable description
@@ -17,9 +17,9 @@ class PermissionEntity implements PermissionEntityInterface
     // grouping for the permission
     public string $group;
     // migration which added the permission
-    public readonly ?string $migration;
+    public protected(set) ?string $migration = null;
     // if the permission is active or not
-    public readonly int $is_active;
+    public protected(set) int $is_active;
 
     public function __construct(protected array $config, protected PermissionModelInterface $permissionModel)
     {

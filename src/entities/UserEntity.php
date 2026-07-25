@@ -11,17 +11,20 @@ use orange\acl\interfaces\UserEntityInterface;
 
 class UserEntity implements UserEntityInterface
 {
-    public readonly int $id;
+    public protected(set) int $id;
     // users name
     public string $username;
     // users email
     public string $email;
     // if the user is active or not
-    public readonly int $is_active;
+    public protected(set) int $is_active;
     // soft delete user
-    public readonly int $is_deleted;
-    // users password
-    private readonly string $password;
+    public protected(set) int $is_deleted;
+    // users password hash - declared so the column has somewhere to land during
+    // FETCH_CLASS hydration (an undeclared column would hit __set and throw).
+    // deliberately not public: update() only ships public properties, and the
+    // hash must never be readable from outside the entity hierarchy
+    protected string $password;
 
     protected array $permissions = [];
     protected array $roles = [];
@@ -29,8 +32,14 @@ class UserEntity implements UserEntityInterface
 
     protected bool $lazyLoaded = false;
 
+    // PDO assigns the row's columns before it calls the constructor, so __set
+    // needs to tell "still hydrating, no model to load through yet" apart from
+    // "ready to use"
+    protected bool $hydrated = false;
+
     public function __construct(protected array $config, protected UserModelInterface $userModel)
     {
+        $this->hydrated = true;
     }
 
     public function update(): bool
@@ -146,7 +155,7 @@ class UserEntity implements UserEntityInterface
         // field - but during PDO's FETCH_CLASS property assignment the
         // constructor hasn't run yet, so there is no model to load through;
         // an unknown DB column then correctly reads as an unknown property
-        if (isset($this->userModel)) {
+        if ($this->hydrated) {
             $this->lazyLoad();
         }
 

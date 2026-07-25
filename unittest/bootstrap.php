@@ -25,4 +25,3 @@ require $standalone
     ? __DIR__ . '/../vendor/autoload.php'
     : __DIR__ . '/../../../autoload.php';
 
-require __DIR__ . '/unitTestHelper.php';
