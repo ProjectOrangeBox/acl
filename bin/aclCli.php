@@ -5,7 +5,7 @@ declare(strict_types=1);
 
 use orange\acl\Acl;
 use orange\acl\User;
-use orange\validate\exceptions\ValidationFailed;
+use orange\model\exceptions\DtoValidationFailed;
 
 $container = require __DIR__ . '/../../../../bootstrapCli.php';
 
@@ -18,16 +18,16 @@ $pdo->query('TRUNCATE TABLE orange_roles');
 $pdo->query('TRUNCATE TABLE orange_user_role');
 $pdo->query('TRUNCATE TABLE orange_role_permission');
 
-$acl = Acl::getInstance([], container()->pdo, container()->validate);
+$acl = Acl::getInstance([], container()->pdo);
 
 // session-aware "current user" helper
 $currentUser = User::getInstance([], $acl, container()->session);
 
 try {
     // #1
-    $userEntity = $acl->createUser('dmyers', 'dmyers@email.com', 'password', ['is_active' => 1]);
-} catch (ValidationFailed $e) {
-    echo 'ValidationFailed: ' . $e->getErrorsAsHtml('<i class="fa-solid fa-triangle-exclamation"></i> ', '', '</br>') . PHP_EOL;
+    $userEntity = $acl->createUser('dmyers', 'dmyers@email.com', 'change-me-please', ['is_active' => 1]);
+} catch (DtoValidationFailed $e) {
+    echo 'DtoValidationFailed: ' . $e->getErrorsAsHtml('<i class="fa-solid fa-triangle-exclamation"></i> ', '', '</br>') . PHP_EOL;
     exit(1);
 } catch (Throwable $e) {
     echo 'Throwable: ' . $e->getMessage() . PHP_EOL;
@@ -35,7 +35,9 @@ try {
 }
 
 // #2 - matches 'guest user' => 2 in the config
-$guest = $acl->createUser('guest', 'guest@example.com', 'password', ['is_active' => 1]);
+// nobody logs in AS guest, so give it a password no one holds rather than a
+// known one that would happen to be a valid credential for the fallback identity
+$guest = $acl->createUser('guest', 'guest@example.com', bin2hex(random_bytes(24)), ['is_active' => 1]);
 
 // #1 - matches 'admin role' => 1 in the config
 $role = $acl->createRole('admin', 'Administrator');

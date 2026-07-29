@@ -6,74 +6,87 @@ namespace orange\acl\models;
 
 use PDO;
 use Throwable;
-use orange\model\Model;
+use orange\acl\dtos\AclTables;
+use orange\acl\dtos\CreateUserDto;
+use orange\acl\dtos\DeleteUserDto;
+use orange\acl\dtos\UpdateUserDto;
+use orange\acl\dtos\UserPasswordDto;
 use orange\acl\entities\UserEntity;
 use orange\acl\interfaces\AclInterface;
 use orange\acl\interfaces\UserModelInterface;
 use orange\acl\interfaces\RoleEntityInterface;
 use orange\acl\interfaces\UserEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use orange\validate\exceptions\ValidationFailed;
-use orange\validate\interfaces\ValidateInterface;
 use orange\acl\exceptions\RecordNotFoundException;
 
-class UserModel extends Model implements UserModelInterface
+class UserModel extends AclModel implements UserModelInterface
 {
     use ConfigurationTrait;
 
     // wired by Acl::__construct so string role arguments can be resolved
     public AclInterface $acl;
 
+    protected string $tablename = AclTables::USERS;
+
     protected UserMetaModel $userMetaModel;
-    protected string $tableJoin;
+    protected string $tableJoin = AclTables::USER_ROLE;
+    protected string $metaTablename = AclTables::META;
 
-    protected array $rules = [
-        'id' => ['isRequired|integer', 'Id'],
-        'username' => ['isRequired|minLength[4]|maxLength[64]|isUnique[%s,username,id,pdo]', 'User Name'],
-        'email' => ['isRequired|minLength[4]|maxLength[255]|isUnique[%s,email,id,pdo]', 'Email'],
-        'password' => ['isRequired|minLength[4]|maxLength[255]', 'Password'],
-        'is_active' => ['ifEmpty[0]|isOneOf[0,1]', 'Is Active'],
-    ];
-    protected array $ruleSets = [
-        // meta columns (dashboard_url, phone, ext) are validated by
-        // UserMetaModel's own rules, not here
-        'create' => ['username', 'email', 'password', 'is_active'],
-        'update' => ['id', 'username', 'email', 'is_active'],
-        'delete' => ['id'],
-        // updatePassword() runs the same password policy as create
-        'password' => ['password'],
+    /**
+     * One Dto per operation.
+     *
+     * The create and update Dtos span both tables this model writes - the user
+     * row and its meta row - tagging each column #[Table] so either half can be
+     * asked for separately. That is what replaced validating the two halves
+     * against two rule sets and merging the failures by hand: one construction
+     * validates everything and reports every failure together.
+     *
+     * Because those Dtos name their tables as attribute literals, renaming
+     * 'user table' or 'user meta table' in config means supplying Dto subclasses
+     * that restate them. Acl's constructor checks the two agree.
+     */
+    protected array $dtos = [
+        'create' => CreateUserDto::class,
+        'update' => UpdateUserDto::class,
+        'delete' => DeleteUserDto::class,
+        // updatePassword() holds the same policy as create
+        'password' => UserPasswordDto::class,
     ];
 
-    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
+    /**
+     * The columns a user may not duplicate, and how to name them in an error.
+     *
+     * @var array<string, string>
+     */
+    protected array $uniqueColumns = ['username' => 'User Name', 'email' => 'Email'];
+
+    public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['UserEntityClass'] ?? UserEntity::class;
 
-        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['user table'];
+        // I manage the meta model 100% - including validating its columns, which
+        // arrive already checked as part of this model's own Dto
+        $this->userMetaModel = new UserMetaModel([], $pdo);
 
-        $this->rules['username'][0] = sprintf($this->rules['username'][0], $this->tablename);
-        $this->rules['email'][0] = sprintf($this->rules['email'][0], $this->tablename);
-
-        $this->tableJoin = $this->aclConfig['user role table'];
-
-        // I manage the meta model 100%
-        $this->userMetaModel = new UserMetaModel(['tablename' => $this->aclConfig['user meta table']], $pdo, $validateService);
-
-        $validateService->throwExceptionOnFailure(true);
-
-        parent::__construct($this->aclConfig, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo);
 
         $this->sql->throwExceptions(true);
     }
 
     public function create(array $columns): UserEntityInterface
     {
-        // normalize before validating so isUnique checks the stored form
-        $columns = $this->normalizeEmail($columns);
+        // One construction validates both halves, so a bad phone and a short
+        // password are reported together rather than whichever was checked
+        // first. The Dto also trims and lowercases the email on the way through,
+        // which is why nothing normalizes it here any more.
+        $dto = $this->requireDto('create', $columns);
 
-        // validate the user and meta halves against their own rules; each
-        // validateFields() returns ONLY its validated, whitelisted columns -
-        // anything else the caller passed never reaches an insert
-        [$userColumns, $metaColumns] = $this->validateBoth('create', $columns);
+        // each table's share of the same validated result - keyed by database
+        // column name, so nothing the Dto didn't declare reaches an insert
+        $userColumns = $dto->asColumns(tablename: $this->tablename);
+        $metaColumns = $dto->asColumns(tablename: $this->metaTablename);
+
+        $this->ensureUnique($userColumns, $this->uniqueColumns);
 
         // hash AFTER validation so the password rules judge the plaintext,
         // not a fixed-length hash
@@ -85,7 +98,8 @@ class UserModel extends Model implements UserModelInterface
         try {
             $userId = (int)$this->sql->insert()->into($this->tablename)->values($userColumns)->execute()->lastInsertId();
 
-            // the meta row shares the user row's primary key
+            // the meta row shares the user row's primary key, which only exists
+            // once the insert above has run
             $metaColumns['id'] = $userId;
 
             $this->userMetaModel->create($metaColumns);
@@ -106,14 +120,20 @@ class UserModel extends Model implements UserModelInterface
      */
     public function update(array $columns): bool
     {
-        // normalize before validating so isUnique checks the stored form
-        $columns = $this->normalizeEmail($columns);
+        $dto = $this->requireDto('update', $columns);
 
-        [$userColumns, $metaColumns] = $this->validateBoth('update', $columns);
+        // the primary key targets the WHERE - withoutPrimary keeps it out of the
+        // SET, and each table is asked for its own key and columns
+        $id = (int)$dto->primaryValue($this->tablename);
+        $userColumns = $dto->asColumns(withoutPrimary: true, tablename: $this->tablename);
+        $metaColumns = $dto->asColumns(withoutPrimary: true, tablename: $this->metaTablename);
 
-        // the primary key targets the WHERE - it is never a SET column
-        $id = (int)$userColumns['id'];
-        unset($userColumns['id']);
+        // the row keeps its own username and email; only another row holding
+        // them is a conflict
+        $this->ensureUnique($userColumns, $this->uniqueColumns, $id);
+
+        // the meta row shares the user row's key
+        $metaColumns['id'] = $id;
 
         $this->pdo->beginTransaction();
 
@@ -144,7 +164,7 @@ class UserModel extends Model implements UserModelInterface
     {
         // the password policy applies to changes exactly as it does to
         // create - validate the plaintext (throws on failure), then hash
-        $fields = (array)$this->validateFields('password', ['password' => $password]);
+        $fields = $this->validateFields('password', ['password' => $password]);
 
         $this->sql->update($this->tablename)->set(['password' => $this->passwordHash($fields['password'])])->where('id', '=', $id)->execute();
 
@@ -257,10 +277,10 @@ class UserModel extends Model implements UserModelInterface
      */
     public function getRolesPermissions(int $userId): array
     {
-        $userRoleTable = $this->aclConfig['user role table'];
-        $roleTable = $this->aclConfig['role table'];
-        $rolePermissionTable = $this->aclConfig['role permission table'];
-        $permissionTable = $this->aclConfig['permission table'];
+        $userRoleTable = AclTables::USER_ROLE;
+        $roleTable = AclTables::ROLES;
+        $rolePermissionTable = AclTables::ROLE_PERMISSION;
+        $permissionTable = AclTables::PERMISSIONS;
 
         $roles = $this->sql
             ->select([$roleTable . '.id', $roleTable . '.name'])
@@ -293,20 +313,6 @@ class UserModel extends Model implements UserModelInterface
     }
 
     /**
-     * Emails are stored trimmed + lowercase, matching orange/auth's
-     * normalized-login default - so credential lookups never depend on the
-     * database collation.
-     */
-    protected function normalizeEmail(array $columns): array
-    {
-        if (isset($columns['email']) && is_string($columns['email'])) {
-            $columns['email'] = mb_strtolower(trim($columns['email']));
-        }
-
-        return $columns;
-    }
-
-    /**
      * Hashes a plaintext password - always; anything that must store a
      * pre-computed hash (a migration import, say) belongs in SQL, not here.
      */
@@ -329,39 +335,5 @@ class UserModel extends Model implements UserModelInterface
         }
 
         return $arg;
-    }
-
-    /**
-     * Validates $columns against this model's AND the meta model's rule set,
-     * collecting failures from both into a single ValidationFailed so the
-     * caller sees every error at once. Returns [userColumns, metaColumns] -
-     * each already filtered down to its own validated whitelist.
-     */
-    protected function validateBoth(string $set, array $columns): array
-    {
-        $userColumns = [];
-        $metaColumns = [];
-
-        // setup a validation failed exception as a collector
-        $errors = new ValidationFailed();
-
-        try {
-            $metaColumns = (array)$this->userMetaModel->validateFields($set, $columns);
-        } catch (ValidationFailed $vf) {
-            $errors->merge($vf);
-        }
-
-        try {
-            $userColumns = (array)$this->validateFields($set, $columns);
-        } catch (ValidationFailed $vf) {
-            $errors->merge($vf);
-        }
-
-        // if it has errors then "throw" it
-        if ($errors->hasErrors()) {
-            throw $errors;
-        }
-
-        return [$userColumns, $metaColumns];
     }
 }

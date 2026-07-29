@@ -1,0 +1,58 @@
+<?php
+
+declare(strict_types=1);
+
+namespace orange\acl\dtos;
+
+use orange\dto\Dto;
+use orange\dto\attributes\Column;
+use orange\dto\attributes\Table;
+use orange\dto\attributes\Label;
+use orange\dto\attributes\filters\DefaultTo;
+use orange\dto\attributes\filters\ToInteger;
+use orange\dto\attributes\filters\Trim;
+use orange\dto\attributes\validations\BetweenLength;
+use orange\dto\attributes\validations\InList;
+use orange\dto\attributes\validations\IsRequired;
+
+/**
+ * A new permission.
+ *
+ * Uniqueness of the key is not expressible as an attribute (a Dto has no
+ * database handle) and lives in PermissionModel, backed by the table's UNIQUE
+ * index. See {@see AclTables} on the #[Table] tags.
+ */
+class CreatePermissionDto extends Dto
+{
+    #[Trim]
+    #[IsRequired]
+    #[BetweenLength(4, 255)]
+    #[Label('Key')]
+    #[Column('key')]
+    #[Table(AclTables::PERMISSIONS)]
+    public protected(set) string $key;
+
+    #[Trim]
+    #[IsRequired]
+    #[BetweenLength(4, 512)]
+    #[Label('Description')]
+    #[Column('description')]
+    #[Table(AclTables::PERMISSIONS)]
+    public protected(set) string $description;
+
+    #[Trim]
+    #[IsRequired]
+    #[BetweenLength(4, 128)]
+    #[Label('Group')]
+    #[Column('group')]
+    #[Table(AclTables::PERMISSIONS)]
+    public protected(set) string $group;
+
+    #[DefaultTo(1)]
+    #[ToInteger]
+    #[InList([0, 1])]
+    #[Label('Is Active')]
+    #[Column('is_active')]
+    #[Table(AclTables::PERMISSIONS)]
+    public protected(set) int $is_active;
+}

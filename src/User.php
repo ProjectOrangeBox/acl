@@ -48,14 +48,40 @@ class User extends Singleton implements UserInterface
     public function load(): UserEntityInterface
     {
         try {
-            return $this->acl->getUser($this->retrieve());
+            $userId = $this->retrieve();
+
+            $user = $this->acl->getUser($userId);
+
+            // a session outlives the account it names. orange/auth can only
+            // refuse a deleted or deactivated account at the login gate, so
+            // without this check an account revoked *after* it logged in keeps
+            // a fully-privileged session until it next tries to log in - which
+            // a revoked account has no reason to do. Treat it as stale instead.
+            if ($userId !== $this->guestUserId && !$this->isUsable($user)) {
+                throw new RecordNotFoundException('User Record ' . $userId . ' is no longer usable');
+            }
+
+            return $user;
         } catch (RecordNotFoundException) {
-            // a stale session (the user was removed since logging in) is not
-            // an error - drop back to the guest user and reset the session
+            // a stale session (the user was removed or revoked since logging in)
+            // is not an error - drop back to the guest user and reset the session
             $this->save($this->guestUserId);
 
             return $this->acl->getUser($this->guestUserId);
         }
+    }
+
+    /**
+     * Whether an account may still act as the session's identity.
+     *
+     * Deliberately not applied to the guest user: guest is the fallback itself,
+     * so rejecting it would leave nothing to fall back to. UserModel::read()
+     * stays unfiltered on purpose - admin tooling legitimately needs to load a
+     * deleted or deactivated user - so this is the layer that enforces it.
+     */
+    protected function isUsable(UserEntityInterface $user): bool
+    {
+        return $user->is_active === 1 && $user->is_deleted === 0;
     }
 
     public function change(int $userID): UserEntityInterface

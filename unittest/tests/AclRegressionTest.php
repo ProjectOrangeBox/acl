@@ -3,10 +3,60 @@
 declare(strict_types=1);
 
 use orange\acl\Acl;
-use orange\validate\Validate;
 use orange\acl\exceptions\AclException;
-use orange\validate\exceptions\ValidationFailed;
+use orange\model\exceptions\DtoValidationFailed;
 use orange\acl\exceptions\RecordNotFoundException;
+use orange\acl\dtos\CreateRoleDto;
+use orange\acl\models\RoleModel;
+use orange\dto\attributes\Column;
+use orange\dto\attributes\Label;
+use orange\dto\attributes\Table;
+use orange\dto\attributes\filters\DefaultTo;
+use orange\dto\attributes\filters\ToInteger;
+use orange\dto\attributes\filters\Trim;
+use orange\dto\attributes\validations\BetweenLength;
+use orange\dto\attributes\validations\InList;
+use orange\dto\attributes\validations\IsRequired;
+
+/**
+ * Moving a table now takes a Dto that names the new one ...
+ */
+class CustomRoleDto extends CreateRoleDto
+{
+    #[Trim]
+    #[IsRequired]
+    #[BetweenLength(4, 128)]
+    #[Label('Name')]
+    #[Column('name')]
+    #[Table('custom_roles')]
+    public protected(set) string $name;
+
+    #[Trim]
+    #[IsRequired]
+    #[BetweenLength(4, 512)]
+    #[Label('Description')]
+    #[Column('description')]
+    #[Table('custom_roles')]
+    public protected(set) string $description;
+
+    #[DefaultTo(1)]
+    #[ToInteger]
+    #[InList([0, 1])]
+    #[Label('Is Active')]
+    #[Column('is_active')]
+    #[Table('custom_roles')]
+    public protected(set) int $is_active;
+}
+
+/** ... and a model that writes it, registering that Dto. */
+class CustomRoleModel extends RoleModel
+{
+    protected string $tablename = 'custom_roles';
+
+    protected array $dtos = [
+        'create' => CustomRoleDto::class,
+    ];
+}
 
 /**
  * Regression coverage for the role/permission linking, output shapes, and
@@ -67,11 +117,8 @@ final class AclRegressionTest extends unitTestHelper
             `ext` TEXT
         )');
 
-        // the isUnique validation rule looks up the PDO connection through the
-        // container by service name (defaults to "pdo")
-        \orange\framework\Container::getInstance()->set('pdo', $this->pdo);
 
-        $this->instance = Acl::newInstance([], $this->pdo, Validate::newInstance([]));
+        $this->instance = Acl::newInstance([], $this->pdo);
     }
 
     private function makeUser(string $name = 'dmyers'): \orange\acl\interfaces\UserEntityInterface
@@ -403,18 +450,29 @@ final class AclRegressionTest extends unitTestHelper
 
     /* fail-fast construction */
 
-    public function testInvalidTableIdentifierThrowsAtConstruction(): void
+    /**
+     * Table names are constants now, so there is no caller-supplied identifier
+     * to interpolate into SQL and nothing left to sanitize - the injection this
+     * used to guard against cannot be expressed. What has to hold instead is
+     * that the option is refused rather than ignored.
+     */
+    public function testTableNameConfigIsRefusedRatherThanIgnored(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-
-        Acl::newInstance(['user table' => 'bad`name; drop --'], $this->pdo, Validate::newInstance([]));
+        foreach (\orange\acl\dtos\AclTables::removedConfigKeys() as $key) {
+            try {
+                Acl::newInstance([$key => 'bad`name; drop --'], $this->pdo);
+                $this->fail('the removed config key "' . $key . '" was accepted');
+            } catch (InvalidArgumentException $e) {
+                $this->assertStringContainsString('no longer supported', $e->getMessage());
+            }
+        }
     }
 
     public function testModelClassMustImplementItsInterface(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        Acl::newInstance(['userModel' => \stdClass::class], $this->pdo, Validate::newInstance([]));
+        Acl::newInstance(['userModel' => \stdClass::class], $this->pdo);
     }
 
     public function testConstructorForcesPdoExceptionMode(): void
@@ -422,9 +480,94 @@ final class AclRegressionTest extends unitTestHelper
         // a handle deliberately created in silent mode
         $silent = new PDO('sqlite::memory:');
 
-        Acl::newInstance([], $silent, Validate::newInstance([]));
+        Acl::newInstance([], $silent);
 
         $this->assertSame(PDO::ERRMODE_EXCEPTION, $silent->getAttribute(PDO::ATTR_ERRMODE));
+    }
+
+    /**
+     * The supported way to move a table: a model subclass naming it, and Dto
+     * subclasses restating their #[Table] so the two halves cannot drift. This
+     * is what replaced the config keys - more work, but it cannot half-apply.
+     */
+    public function testATableCanBeMovedBySubclassingTheModelAndItsDtos(): void
+    {
+        $this->pdo->exec('CREATE TABLE `custom_roles` (
+            `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+            `name` TEXT NOT NULL,
+            `description` TEXT NOT NULL,
+            `migration` TEXT,
+            `is_active` INTEGER NOT NULL DEFAULT 1
+        )');
+
+        $acl = Acl::newInstance(['roleModel' => CustomRoleModel::class], $this->pdo);
+
+        $role = $acl->createRole('editor', 'Can edit');
+
+        $this->assertSame('editor', $role->name);
+        $this->assertSame(1, (int)$this->pdo->query('select count(*) from `custom_roles`')->fetchColumn());
+
+        // and nothing landed in the shipped table
+        $this->assertSame(0, (int)$this->pdo->query('select count(*) from `orange_roles`')->fetchColumn());
+    }
+
+    /* uniqueness - the one rule that could not become a Dto attribute */
+
+    public function testDuplicateUsernameAndEmailAreRejectedPerField(): void
+    {
+        $this->makeUser('dmyers');
+
+        try {
+            $this->instance->createUser('dmyers', 'other@example.com', 'password123');
+            $this->fail('a duplicate username was accepted');
+        } catch (DtoValidationFailed $e) {
+            $this->assertSame(['username'], $e->getKeys());
+        }
+
+        try {
+            $this->instance->createUser('someoneelse', 'dmyers@example.com', 'password123');
+            $this->fail('a duplicate email was accepted');
+        } catch (DtoValidationFailed $e) {
+            $this->assertSame(['email'], $e->getKeys());
+        }
+    }
+
+    /**
+     * A row is allowed to keep its own unique values - only another row holding
+     * them is a conflict, which is what the ignore-self argument is for.
+     */
+    public function testUpdateKeepsItsOwnUniqueValuesButRejectsAnothers(): void
+    {
+        $first = $this->makeUser('dmyers');
+        $second = $this->makeUser('someoneelse');
+
+        // re-saving unchanged values is not a collision with itself
+        $first->update();
+        $this->assertSame('dmyers', $this->instance->getUser($first->id)->username);
+
+        $this->expectException(DtoValidationFailed::class);
+
+        $this->instance->userModel->update([
+            'id' => $first->id,
+            'username' => 'someoneelse',
+            'email' => $second->email,
+        ]);
+    }
+
+    /**
+     * One Dto spans both tables, so a failure on either half is reported with
+     * the other rather than whichever rule set happened to run first - that is
+     * what replaced merging two exceptions by hand.
+     */
+    public function testFailuresFromBothTablesAreReportedTogether(): void
+    {
+        try {
+            // too short for the user half; the meta half is fine
+            $this->instance->createUser('ab', 'x', 'short');
+            $this->fail('invalid input was accepted');
+        } catch (DtoValidationFailed $e) {
+            $this->assertSame(['username', 'email', 'password'], $e->getKeys());
+        }
     }
 
     /* normalization & password policy */
@@ -447,9 +590,38 @@ final class AclRegressionTest extends unitTestHelper
     {
         $user = $this->makeUser();
 
-        $this->expectException(ValidationFailed::class);
+        $this->expectException(DtoValidationFailed::class);
 
-        $user->updatePassword('ab'); // below minLength[4]
+        $user->updatePassword('ab'); // below minLength[10]
+    }
+
+    /**
+     * Pins the actual threshold rather than just "something short fails" - a
+     * 9-character password is the case that a weaker policy would have let
+     * through, so it is the one worth asserting on. Both create and change go
+     * through the same rule.
+     */
+    public function testPasswordShorterThanTheMinimumIsRejected(): void
+    {
+        $user = $this->makeUser();
+
+        // one under the limit
+        try {
+            $user->updatePassword('123456789');
+            $this->fail('a 9 character password was accepted');
+        } catch (DtoValidationFailed) {
+            $this->assertTrue(true);
+        }
+
+        // exactly at the limit is fine
+        $this->assertTrue($user->updatePassword('1234567890'));
+    }
+
+    public function testCreateUserRejectsAPasswordUnderTheMinimum(): void
+    {
+        $this->expectException(DtoValidationFailed::class);
+
+        $this->instance->createUser('shortpw', 'shortpw@example.com', '123456789');
     }
 
     public function testUpdatePasswordHashesAndStores(): void

@@ -9,20 +9,15 @@ See [README.md](README.md) for the concepts and the configuration reference.
 ```php
 use orange\acl\Acl;
 use orange\acl\User;
-use orange\validate\Validate;
 
 // inside an Orange Framework app the container provides these:
-$acl = Acl::getInstance([], container()->pdo, container()->validate);
+$acl = Acl::getInstance([], container()->pdo);
 $currentUser = User::getInstance([], $acl, container()->session);
 
-// standalone (a script, a different framework):
+// standalone (a script, a different framework) - a PDO handle is all it needs:
 $pdo = new PDO('mysql:host=localhost;dbname=app', $dbUser, $dbPass);
 
-// the isUnique validation rule resolves its PDO connection through the
-// container by service name ("pdo") - register it once
-\orange\framework\Container::getInstance()->set('pdo', $pdo);
-
-$acl = Acl::getInstance([], $pdo, Validate::newInstance([]));
+$acl = Acl::getInstance([], $pdo);
 ```
 
 Pass config overrides as the first argument — they merge over
@@ -171,13 +166,14 @@ $permissions = $acl->permissionModel->readAll();
 
 ```php
 use orange\acl\exceptions\RecordNotFoundException;
-use orange\validate\exceptions\ValidationFailed;
+use orange\model\exceptions\DtoValidationFailed;
 
-// create()/update() throw ValidationFailed carrying every failed rule
+// create()/update() throw DtoValidationFailed carrying every failed rule
 try {
     $user = $acl->createUser($username, $email, $password, ['is_active' => 1]);
-} catch (ValidationFailed $e) {
-    $e->getErrors();          // error objects - each carries ->text
+} catch (DtoValidationFailed $e) {
+    $e->getErrors();          // ['email' => ['Email is required'], ...]
+    $e->getKeys();            // ['email', ...] - just the fields that failed
     $e->getErrorsAsHtml('<li>', '</li>');    // '<li>Email is required</li>...'
     $e->getHttpCode();        // 406
 }
@@ -197,23 +193,30 @@ try {
     $user = $acl->createUser($in['username'], $in['email'], $in['password']);
 
     echo json_encode(['id' => $user->id]);
-} catch (ValidationFailed $e) {
+} catch (DtoValidationFailed $e) {
     http_response_code($e->getHttpCode());
 
-    echo $e->getErrorsAsJson();
+    // has / count / keys / errors - the same body the framework's exception
+    // handler would have sent
+    echo $e->getOutput();
 }
 ```
 
 ## Customizing
 
 ```php
-// your own table names and entity class
+// your own entity and model classes
 $acl = Acl::getInstance([
-    'user table' => 'app_users',
-    'user meta table' => 'app_user_meta',
     'UserEntityClass' => \app\entities\AppUserEntity::class, // extend UserEntity
-], $pdo, $validate);
+    'userModel' => \app\models\AppUserModel::class,          // extend UserModel
+], $pdo);
 ```
 
-Table names are validated as plain SQL identifiers and model classes against
-their interfaces — a typo throws `InvalidArgumentException` at construction.
+Model classes are checked against their interfaces — a typo throws
+`InvalidArgumentException` at construction.
+
+Table names are **not** configurable. They are constants on `AclTables`, because
+a Dto names its table in a `#[Table(...)]` attribute and an attribute cannot read
+config; a config key would have moved the models and left the Dtos behind. Use a
+different table by subclassing the model and its Dtos together — see the README.
+Passing one of the old `'user table'` style keys throws.

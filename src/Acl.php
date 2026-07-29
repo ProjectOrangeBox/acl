@@ -8,6 +8,7 @@ use PDO;
 use InvalidArgumentException;
 use orange\acl\models\RoleModel;
 use orange\acl\models\UserModel;
+use orange\acl\dtos\AclTables;
 use orange\framework\base\Singleton;
 use orange\acl\models\PermissionModel;
 use orange\acl\interfaces\AclInterface;
@@ -16,7 +17,6 @@ use orange\acl\interfaces\UserModelInterface;
 use orange\acl\interfaces\RoleEntityInterface;
 use orange\acl\interfaces\UserEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use orange\validate\interfaces\ValidateInterface;
 use orange\acl\interfaces\PermissionModelInterface;
 use orange\acl\interfaces\PermissionEntityInterface;
 
@@ -29,7 +29,7 @@ class Acl extends Singleton implements AclInterface
     public RoleModel $roleModel;
     public PermissionModel $permissionModel;
 
-    protected function __construct(array $config, PDO $pdo, ValidateInterface $validateService)
+    protected function __construct(array $config, PDO $pdo)
     {
         $config = $this->mergeConfigWith($config);
 
@@ -38,13 +38,18 @@ class Acl extends Singleton implements AclInterface
         // fatal somewhere downstream
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        // the table names end up inside SQL (identifiers can't be bound as
-        // parameters) - verifying them here turns a typo'd or malicious
-        // config value into an immediate, obvious throw, not a weird
-        // mid-request query error
-        foreach (['user table', 'role table', 'permission table', 'user role table', 'role permission table', 'user meta table'] as $key) {
-            if (!preg_match('/^[A-Za-z0-9_]+$/', (string)($config[$key] ?? ''))) {
-                throw new InvalidArgumentException('Config "' . $key . '" is not a valid SQL identifier: "' . (string)($config[$key] ?? '') . '"');
+        // Table names are no longer configurable - they are constants on
+        // AclTables, because a Dto's #[Table] attribute cannot read config and a
+        // rename that moved the models but not the Dtos was a half-supported
+        // option. Refuse the old keys loudly: silently ignoring one would point
+        // every query at a different table than the caller asked for, and the
+        // first sign of that is rows written somewhere unexpected.
+        //
+        // This also retires the SQL-identifier check that used to guard these
+        // values. There is no longer a caller-supplied identifier to interpolate.
+        foreach (AclTables::removedConfigKeys() as $key) {
+            if (isset($config[$key])) {
+                throw new InvalidArgumentException('Config "' . $key . '" is no longer supported - ACL table names are constants on ' . AclTables::class . '. To use a different table, subclass the model with its own $tablename and register Dto subclasses restating their #[Table] attributes.');
             }
         }
 
@@ -55,9 +60,9 @@ class Acl extends Singleton implements AclInterface
             }
         }
 
-        $this->userModel = new $config['userModel']($config, $pdo, $validateService);
-        $this->roleModel = new $config['roleModel']($config, $pdo, $validateService);
-        $this->permissionModel = new $config['permissionModel']($config, $pdo, $validateService);
+        $this->userModel = new $config['userModel']($config, $pdo);
+        $this->roleModel = new $config['roleModel']($config, $pdo);
+        $this->permissionModel = new $config['permissionModel']($config, $pdo);
 
         // the models resolve string role/permission arguments back through
         // this facade - without this wiring those lookups would fail on an
@@ -69,7 +74,9 @@ class Acl extends Singleton implements AclInterface
     /**
      * get & create entities
      *
-     * create will throw ValidationFailed Exceptions on fail
+     * create will throw DtoValidationFailed on fail - carrying the offending
+     * fields keyed by name, from the operation's Dto or from the model's
+     * uniqueness check, which report identically
      */
     public function createUser(string $username, string $email, string $password, array $fields = []): UserEntityInterface
     {

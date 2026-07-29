@@ -3,14 +3,13 @@
 declare(strict_types=1);
 
 use orange\acl\Acl;
-use orange\validate\Validate;
 use orange\acl\models\UserModel;
 use orange\acl\models\RoleModel;
 use orange\acl\interfaces\AclInterface;
 use orange\acl\models\PermissionModel;
 use orange\acl\interfaces\RoleEntityInterface;
 use orange\acl\interfaces\UserEntityInterface;
-use orange\validate\exceptions\ValidationFailed;
+use orange\model\exceptions\DtoValidationFailed;
 use orange\acl\exceptions\RecordNotFoundException;
 use orange\acl\interfaces\PermissionEntityInterface;
 
@@ -71,11 +70,8 @@ final class AclTest extends unitTestHelper
             `ext` TEXT
         )');
 
-        // the isUnique validation rule looks up the PDO connection through the
-        // container by service name (defaults to "pdo")
-        \orange\framework\Container::getInstance()->set('pdo', $this->pdo);
 
-        $this->instance = Acl::newInstance([], $this->pdo, Validate::newInstance([]));
+        $this->instance = Acl::newInstance([], $this->pdo);
     }
 
     public function testConstructWiresUserRoleAndPermissionModels(): void
@@ -117,14 +113,14 @@ final class AclTest extends unitTestHelper
     {
         $this->instance->createUser('dmyers', 'dmyers@example.com', 'password123');
 
-        $this->expectException(ValidationFailed::class);
+        $this->expectException(DtoValidationFailed::class);
 
         $this->instance->createUser('someoneelse', 'dmyers@example.com', 'password123');
     }
 
     public function testCreateUserThrowsValidationFailedForShortUsername(): void
     {
-        $this->expectException(ValidationFailed::class);
+        $this->expectException(DtoValidationFailed::class);
 
         $this->instance->createUser('ab', 'dmyers@example.com', 'password123');
     }
@@ -161,7 +157,7 @@ final class AclTest extends unitTestHelper
     {
         $this->instance->createRole('admin', 'Administrator');
 
-        $this->expectException(ValidationFailed::class);
+        $this->expectException(DtoValidationFailed::class);
 
         $this->instance->createRole('admin', 'Some Other Description');
     }
@@ -199,7 +195,7 @@ final class AclTest extends unitTestHelper
     {
         $this->instance->createPermission('uri://open/file', 'Open File', 'File');
 
-        $this->expectException(ValidationFailed::class);
+        $this->expectException(DtoValidationFailed::class);
 
         $this->instance->createPermission('uri://open/file', 'Open File Again', 'File');
     }
@@ -224,8 +220,8 @@ final class AclTest extends unitTestHelper
 
     public function testGetInstanceReturnsSameSingletonInstance(): void
     {
-        $first = Acl::getInstance([], $this->pdo, Validate::newInstance([]));
-        $second = Acl::getInstance([], $this->pdo, Validate::newInstance([]));
+        $first = Acl::getInstance([], $this->pdo);
+        $second = Acl::getInstance([], $this->pdo);
 
         $this->assertInstanceOf(AclInterface::class, $first);
         $this->assertSame($first, $second);
@@ -233,8 +229,8 @@ final class AclTest extends unitTestHelper
 
     public function testNewInstanceReturnsADifferentInstanceEachTime(): void
     {
-        $first = Acl::newInstance([], $this->pdo, Validate::newInstance([]));
-        $second = Acl::newInstance([], $this->pdo, Validate::newInstance([]));
+        $first = Acl::newInstance([], $this->pdo);
+        $second = Acl::newInstance([], $this->pdo);
 
         $this->assertNotSame($first, $second);
     }

@@ -31,7 +31,7 @@ $currentUser->change($user->id);           // switch the session to this user
 $currentUser->logout();                    // back to the guest user
 ```
 
-`Acl` and `User` are both singletons — configure the underlying `userModel`/`roleModel`/`permissionModel` classes and table names via `acl/src/config/acl.php`, and the guest user id + session key via `acl/src/config/user.php` (the `'guest user'` value must match between the two files). Entities (`UserEntity`, `RoleEntity`, `PermissionEntity`) and models throw `RecordNotFoundException` (404, extends `AclException`) when a lookup fails, and `ValidationFailed` (from [`orange/validate`](../validate/README.md)) when `create()`/`update()` input doesn't pass the configured rules.
+`Acl` and `User` are both singletons — configure the underlying `userModel`/`roleModel`/`permissionModel` classes via `acl/src/config/acl.php`, and the guest user id + session key via `acl/src/config/user.php` (the `'guest user'` value must match between the two files). Table names are not config; they are constants on `AclTables`, overridden by subclassing a model and its Dtos together (see [Table names are not configuration](#table-names-are-not-configuration)). Entities (`UserEntity`, `RoleEntity`, `PermissionEntity`) and models throw `RecordNotFoundException` (404, extends `AclException`) when a lookup fails, and `DtoValidationFailed` (from [`orange/model`](../model/README.md), 406) when `create()`/`update()` input doesn't satisfy the operation's Dto.
 
 **A cookbook of worked examples lives in [example.md](example.md).**
 
@@ -41,16 +41,43 @@ $currentUser->logout();                    // back to the guest user
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `user table` | `orange_users` | user rows (DDL in `support/`) |
-| `user meta table` | `orange_user_meta` | per-user meta rows (`dashboard_url`, `phone`, `ext`) |
-| `role table` | `orange_roles` | role rows |
-| `permission table` | `orange_permissions` | permission rows |
-| `user role table` | `orange_user_role` | user↔role join |
-| `role permission table` | `orange_role_permission` | role↔permission join |
 | `admin user` / `guest user` | `1` / `2` | well-known user ids |
 | `admin role` / `everyone role` | `1` / `2` | well-known role ids (`isAdmin()`, implicit `Everyone`) |
 | `userModel` / `roleModel` / `permissionModel` | package models | swap in your own (must implement the matching interface) |
 | `UserEntityClass` / `RoleEntityClass` / `PermissionEntityClass` | package entities | swap in your own entity classes |
+
+### Table names are not configuration
+
+They were once six keys here. They are constants on `orange\acl\dtos\AclTables`
+now (`orange_users`, `orange_user_meta`, `orange_roles`, `orange_permissions`,
+`orange_user_role`, `orange_role_permission`; DDL and load order in
+[`support/`](support/README.md)), because a Dto
+declares its table with `#[Table(...)]` and an attribute takes a constant
+expression — it cannot read a config value. A renamed table therefore moved the
+models and left the Dtos behind, and the mismatch only surfaced on the first
+write. Passing any of the old keys now throws at construction rather than being
+quietly ignored.
+
+To use a different table, subclass the model and the Dtos it registers, so both
+halves are stated together:
+
+```php
+class AppRoleDto extends CreateRoleDto
+{
+    #[IsRequired] #[BetweenLength(4, 128)]
+    #[Column('name')] #[Table('app_roles')]
+    public protected(set) string $name;
+    // ... restate the remaining columns
+}
+
+class AppRoleModel extends RoleModel
+{
+    protected string $tablename = 'app_roles';
+    protected array $dtos = ['create' => AppRoleDto::class, /* ... */];
+}
+
+$acl = Acl::getInstance(['roleModel' => AppRoleModel::class], $pdo);
+```
 
 `src/config/user.php` (merged under anything you pass to `User::getInstance()`):
 

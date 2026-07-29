@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use orange\acl\Acl;
 use orange\acl\User;
-use orange\validate\Validate;
 use orange\session\SessionInterface;
 
 /**
@@ -226,9 +225,8 @@ final class UserHelperTest extends unitTestHelper
         $this->pdo->exec('CREATE TABLE `orange_role_permission` (`role_id` INTEGER NOT NULL, `permission_id` INTEGER NOT NULL)');
         $this->pdo->exec('CREATE TABLE `orange_user_meta` (`id` INTEGER PRIMARY KEY, `dashboard_url` TEXT, `phone` TEXT, `ext` TEXT)');
 
-        \orange\framework\Container::getInstance()->set('pdo', $this->pdo);
 
-        $this->acl = Acl::newInstance([], $this->pdo, Validate::newInstance([]));
+        $this->acl = Acl::newInstance([], $this->pdo);
 
         // seeded in this order so the guest lands on id 2 - matching the
         // default 'guest user' => 2 the entities read from the acl config
@@ -295,6 +293,52 @@ final class UserHelperTest extends unitTestHelper
 
         // and the stale id was replaced in the session
         $this->assertSame($this->guestId, $this->session->data['##user##session##']);
+    }
+
+    /**
+     * Revocation has to take effect on the next request, not the next login.
+     * orange/auth only gets to refuse a soft-deleted account at the login gate,
+     * and a revoked account has no reason to ever log in again - so a session
+     * established before the delete would otherwise stay valid indefinitely.
+     */
+    public function testSoftDeletedUserFallsBackToGuest(): void
+    {
+        $this->instance->change($this->userId);
+        $this->assertSame($this->userId, $this->instance->load()->id);
+
+        // the account is soft deleted while its session is live
+        $this->acl->userModel->delete($this->userId);
+
+        $entity = $this->instance->load();
+
+        $this->assertSame($this->guestId, $entity->id);
+        $this->assertSame($this->guestId, $this->session->data['##user##session##']);
+    }
+
+    /**
+     * Same reasoning for a deactivated (but not deleted) account - Auth::login()
+     * already refuses one, so a live session must not outrank that.
+     */
+    public function testDeactivatedUserFallsBackToGuest(): void
+    {
+        $this->instance->change($this->userId);
+        $this->assertSame($this->userId, $this->instance->load()->id);
+
+        $this->acl->userModel->deactivate($this->userId);
+
+        $this->assertSame($this->guestId, $this->instance->load()->id);
+    }
+
+    /**
+     * The guest user is the fallback itself, so it is exempt from the usable
+     * check - otherwise a guest row that isn't flagged active would leave
+     * load() with nothing to fall back to.
+     */
+    public function testGuestUserIsNotSubjectToTheUsableCheck(): void
+    {
+        $this->acl->userModel->deactivate($this->guestId);
+
+        $this->assertSame($this->guestId, $this->instance->load()->id);
     }
 
     public function testMissingGuestUserConfigThrows(): void

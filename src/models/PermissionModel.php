@@ -6,52 +6,54 @@ namespace orange\acl\models;
 
 use PDO;
 use Throwable;
-use orange\model\Model;
+use orange\acl\dtos\AclTables;
+use orange\acl\dtos\CreatePermissionDto;
+use orange\acl\dtos\DeletePermissionDto;
+use orange\acl\dtos\UpdatePermissionDto;
 use orange\acl\entities\PermissionEntity;
-use orange\validate\interfaces\ValidateInterface;
 use orange\acl\exceptions\RecordNotFoundException;
 use orange\acl\interfaces\PermissionModelInterface;
 use orange\acl\interfaces\PermissionEntityInterface;
 
-class PermissionModel extends Model implements PermissionModelInterface
+class PermissionModel extends AclModel implements PermissionModelInterface
 {
     protected string $tableJoin;
 
-    protected array $rules = [
-        'id' => ['isRequired|integer', 'Id'],
-        'key' => ['isRequired|minLength[4]|maxLength[255]|isUnique[%s,key,id,pdo]', 'Key'],
-        'description' => ['isRequired|minLength[4]|maxLength[512]', 'Description'],
-        'group' => ['isRequired|minLength[4]|maxLength[128]', 'Group'],
-        'is_active' => ['ifEmpty[1]|isOneOf[0,1]', 'Is Active'],
-    ];
-    protected array $ruleSets = [
-        'create' => ['key', 'description', 'group', 'is_active'],
-        'update' => ['id', 'key', 'description', 'group', 'is_active'],
-        'delete' => ['id'],
+    protected string $tablename = AclTables::PERMISSIONS;
+
+    /**
+     * One Dto per operation. The table they write is fixed - see {@see AclTables}
+     * for what overriding it takes.
+     */
+    protected array $dtos = [
+        'create' => CreatePermissionDto::class,
+        'update' => UpdatePermissionDto::class,
+        'delete' => DeletePermissionDto::class,
     ];
 
-    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
+    /**
+     * @var array<string, string>
+     */
+    protected array $uniqueColumns = ['key' => 'Key'];
+
+    public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['PermissionEntityClass'] ?? PermissionEntity::class;
 
-        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['permission table'];
+        $this->tableJoin = AclTables::ROLE_PERMISSION;
 
-        $this->rules['key'][0] = sprintf($this->rules['key'][0], $this->tablename);
-
-        $this->tableJoin = $this->aclConfig['role permission table'];
-
-        $validateService->throwExceptionOnFailure(true);
-
-        parent::__construct($this->aclConfig, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo);
 
         $this->sql->throwExceptions(true);
     }
 
     public function create(array $columns): PermissionEntityInterface
     {
-        // validateFields() throws on failure and returns only the validated,
-        // whitelisted columns - nothing else reaches the insert
-        $columns = (array)$this->validateFields('create', $columns);
+        // throws on failure and returns only the validated, whitelisted columns
+        // keyed by database column name - nothing else reaches the insert
+        $columns = $this->validateFields('create', $columns);
+
+        $this->ensureUnique($columns, $this->uniqueColumns);
 
         $pid = $this->sql->insert()->into($this->tablename)->values($columns)->execute()->lastInsertId();
 
@@ -60,12 +62,14 @@ class PermissionModel extends Model implements PermissionModelInterface
 
     public function update(array $columns): bool
     {
-        // throws an exception on failure; returns the validated whitelist
-        $columns = (array)$this->validateFields('update', $columns);
+        // hold the Dto rather than just its columns - the primary belongs in the
+        // WHERE, so it is read from here and dropped from the SET
+        $dto = $this->requireDto('update', $columns);
 
-        // the primary key targets the WHERE - it is never a SET column
-        $id = (int)$columns['id'];
-        unset($columns['id']);
+        $id = (int)$dto->primaryValue();
+        $columns = $dto->asColumns(withoutPrimary: true);
+
+        $this->ensureUnique($columns, $this->uniqueColumns, $id);
 
         $this->sql->update($this->tablename)->set($columns)->where('id', '=', $id)->execute();
 

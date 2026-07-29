@@ -8,6 +8,15 @@ use orange\acl\interfaces\RoleEntityInterface;
 
 interface UserEntityInterface
 {
+    /**
+     * Account state, readable but not writable from outside the entity - the
+     * session-aware {@see \orange\acl\User} helper reads these to decide whether
+     * a stored session still names a usable account. Changing them goes through
+     * activate()/deactivate() and the model's soft delete, never a direct write.
+     */
+    public int $is_active { get; }
+    public int $is_deleted { get; }
+
     public function update(): bool;
     public function updatePassword(string $newPassword): bool;
     public function deactivate(): bool;

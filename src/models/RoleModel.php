@@ -6,17 +6,19 @@ namespace orange\acl\models;
 
 use PDO;
 use Throwable;
-use orange\model\Model;
+use orange\acl\dtos\AclTables;
+use orange\acl\dtos\CreateRoleDto;
+use orange\acl\dtos\DeleteRoleDto;
+use orange\acl\dtos\UpdateRoleDto;
 use orange\acl\entities\RoleEntity;
 use orange\acl\interfaces\AclInterface;
 use orange\acl\interfaces\RoleModelInterface;
 use orange\acl\interfaces\RoleEntityInterface;
 use orange\framework\traits\ConfigurationTrait;
-use orange\validate\interfaces\ValidateInterface;
 use orange\acl\exceptions\RecordNotFoundException;
 use orange\acl\interfaces\PermissionEntityInterface;
 
-class RoleModel extends Model implements RoleModelInterface
+class RoleModel extends AclModel implements RoleModelInterface
 {
     use ConfigurationTrait;
 
@@ -25,40 +27,46 @@ class RoleModel extends Model implements RoleModelInterface
 
     protected string $tableJoin;
 
-    protected array $rules = [
-        'id' => ['isRequired|integer', 'Id'],
-        'name' => ['isRequired|minLength[4]|maxLength[128]|isUnique[%s,name,id,pdo]', 'Name'],
-        'description' => ['isRequired|minLength[4]|maxLength[512]', 'Description'],
-        'is_active' => ['ifEmpty[1]|isOneOf[0,1]', 'Is Active'],
-    ];
-    protected array $ruleSets = [
-        'create' => ['name', 'description', 'is_active'],
-        'update' => ['id', 'name', 'description', 'is_active'],
-        'delete' => ['id'],
+    protected string $tablename = AclTables::ROLES;
+
+    /**
+     * One Dto per operation, each carrying its own rules, filters and labels.
+     *
+     * The table these write is fixed - see {@see AclTables}. A deployment that
+     * needs a different one subclasses this model with its own $tablename and
+     * registers Dto subclasses here, so the two cannot drift apart.
+     */
+    protected array $dtos = [
+        'create' => CreateRoleDto::class,
+        'update' => UpdateRoleDto::class,
+        'delete' => DeleteRoleDto::class,
     ];
 
-    public function __construct(protected array $aclConfig, PDO $pdo, ValidateInterface $validateService)
+    /**
+     * The columns a role may not duplicate, and how to name them in an error.
+     *
+     * @var array<string, string>
+     */
+    protected array $uniqueColumns = ['name' => 'Name'];
+
+    public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['RoleEntityClass'] ?? RoleEntity::class;
 
-        $this->aclConfig['tablename'] = $this->tablename = $this->aclConfig['role table'];
+        $this->tableJoin = AclTables::ROLE_PERMISSION;
 
-        $this->rules['name'][0] = sprintf($this->rules['name'][0], $this->tablename);
-
-        $this->tableJoin = $this->aclConfig['role permission table'];
-
-        $validateService->throwExceptionOnFailure(true);
-
-        parent::__construct($this->aclConfig, $pdo, $validateService);
+        parent::__construct($this->aclConfig, $pdo);
 
         $this->sql->throwExceptions(true);
     }
 
     public function create(array $columns): RoleEntityInterface
     {
-        // validateFields() throws on failure and returns only the validated,
-        // whitelisted columns - nothing else reaches the insert
-        $columns = (array)$this->validateFields('create', $columns);
+        // throws on failure and returns only the validated, whitelisted columns
+        // keyed by database column name - nothing else reaches the insert
+        $columns = $this->validateFields('create', $columns);
+
+        $this->ensureUnique($columns, $this->uniqueColumns);
 
         $pid = $this->sql->insert()->into($this->tablename)->values($columns)->execute()->lastInsertId();
 
@@ -67,12 +75,15 @@ class RoleModel extends Model implements RoleModelInterface
 
     public function update(array $columns): bool
     {
-        // throws an exception on failure; returns the validated whitelist
-        $columns = (array)$this->validateFields('update', $columns);
+        // hold the Dto rather than just its columns - the primary belongs in the
+        // WHERE, so it is read from here and dropped from the SET
+        $dto = $this->requireDto('update', $columns);
 
-        // the primary key targets the WHERE - it is never a SET column
-        $id = (int)$columns['id'];
-        unset($columns['id']);
+        $id = (int)$dto->primaryValue();
+        $columns = $dto->asColumns(withoutPrimary: true);
+
+        // the row keeps its own name; only another row holding it is a conflict
+        $this->ensureUnique($columns, $this->uniqueColumns, $id);
 
         $this->sql->update($this->tablename)->set($columns)->where('id', '=', $id)->execute();
 
@@ -88,12 +99,13 @@ class RoleModel extends Model implements RoleModelInterface
         // throws an exception
         $this->validateFields('delete', ['id' => $id]);
 
+
         $this->pdo->beginTransaction();
 
         try {
             $this->sql->delete()->from($this->tablename)->where('id', '=', $id)->execute();
             $this->sql->delete()->from($this->tableJoin)->where('role_id', '=', $id)->execute();
-            $this->sql->delete()->from($this->aclConfig['user role table'])->where('role_id', '=', $id)->execute();
+            $this->sql->delete()->from(AclTables::USER_ROLE)->where('role_id', '=', $id)->execute();
 
             $this->pdo->commit();
         } catch (Throwable $e) {
