@@ -36,6 +36,9 @@ class PermissionModel extends AclModel implements PermissionModelInterface
      */
     protected array $uniqueColumns = ['key' => 'Key'];
 
+    /**
+     * @param array<string, mixed> $aclConfig
+     */
     public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['PermissionEntityClass'] ?? PermissionEntity::class;
@@ -47,6 +50,9 @@ class PermissionModel extends AclModel implements PermissionModelInterface
         $this->sql->throwExceptions(true);
     }
 
+    /**
+     * @param array<string, mixed> $columns
+     */
     public function create(array $columns): PermissionEntityInterface
     {
         // throws on failure and returns only the validated, whitelisted columns
@@ -60,6 +66,9 @@ class PermissionModel extends AclModel implements PermissionModelInterface
         return $this->read((int)$pid);
     }
 
+    /**
+     * @param array<string, mixed> $columns
+     */
     public function update(array $columns): bool
     {
         // hold the Dto rather than just its columns - the primary belongs in the
@@ -115,6 +124,8 @@ class PermissionModel extends AclModel implements PermissionModelInterface
         return $this->sql->rowCount() > 0;
     }
 
+    /**
+     */
     public function read(string|int $key): PermissionEntityInterface
     {
         $column = (is_string($key)) ? 'key' : 'id';
@@ -130,6 +141,9 @@ class PermissionModel extends AclModel implements PermissionModelInterface
         return $permissionEntity;
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function readAll(): array
     {
         // the fetch mode set by read() persists on the Sql instance - reset

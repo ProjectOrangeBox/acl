@@ -60,6 +60,9 @@ class UserModel extends AclModel implements UserModelInterface
      */
     protected array $uniqueColumns = ['username' => 'User Name', 'email' => 'Email'];
 
+    /**
+     * @param array<string, mixed> $aclConfig
+     */
     public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['UserEntityClass'] ?? UserEntity::class;
@@ -73,6 +76,9 @@ class UserModel extends AclModel implements UserModelInterface
         $this->sql->throwExceptions(true);
     }
 
+    /**
+     * @param array<string, mixed> $columns
+     */
     public function create(array $columns): UserEntityInterface
     {
         // One construction validates both halves, so a bad phone and a short
@@ -117,6 +123,8 @@ class UserModel extends AclModel implements UserModelInterface
     /**
      * This will not update the password
      * Please use updatePassword()
+     *
+     * @param array<string, mixed> $columns
      */
     public function update(array $columns): bool
     {
@@ -185,6 +193,8 @@ class UserModel extends AclModel implements UserModelInterface
         return $this->sql->rowCount() > 0;
     }
 
+    /**
+     */
     public function read(int $userId): UserEntityInterface
     {
         // rowCount() after a SELECT isn't reliable across PDO drivers (e.g. always 0 on
@@ -201,6 +211,9 @@ class UserModel extends AclModel implements UserModelInterface
         return $userEntity;
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function readAll(): array
     {
         // the fetch mode set by read() persists on the Sql instance - reset
@@ -246,6 +259,8 @@ class UserModel extends AclModel implements UserModelInterface
     /**
      * Replace the user's roles with exactly $roleIds - atomically; a failure
      * rolls the whole relink back and rethrows.
+     *
+     * @param array<array-key, int|string> $roleIds
      */
     public function relink(int $userId, array $roleIds): bool
     {
@@ -274,6 +289,8 @@ class UserModel extends AclModel implements UserModelInterface
      * Two separate queries on purpose: a role with no (active) permissions
      * must still appear in 'roles', which a single joined query can't deliver
      * without LEFT JOIN + ON-clause gymnastics.
+     *
+     * @return array<array-key, mixed>
      */
     public function getRolesPermissions(int $userId): array
     {
@@ -307,6 +324,9 @@ class UserModel extends AclModel implements UserModelInterface
         return ['roles' => $roles, 'permissions' => $permissions];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getMeta(int $userId): array
     {
         return $this->userMetaModel->read($userId);

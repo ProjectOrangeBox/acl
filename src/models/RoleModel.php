@@ -49,6 +49,9 @@ class RoleModel extends AclModel implements RoleModelInterface
      */
     protected array $uniqueColumns = ['name' => 'Name'];
 
+    /**
+     * @param array<string, mixed> $aclConfig
+     */
     public function __construct(protected array $aclConfig, PDO $pdo)
     {
         $this->entityClass = $this->aclConfig['RoleEntityClass'] ?? RoleEntity::class;
@@ -60,6 +63,9 @@ class RoleModel extends AclModel implements RoleModelInterface
         $this->sql->throwExceptions(true);
     }
 
+    /**
+     * @param array<string, mixed> $columns
+     */
     public function create(array $columns): RoleEntityInterface
     {
         // throws on failure and returns only the validated, whitelisted columns
@@ -73,6 +79,9 @@ class RoleModel extends AclModel implements RoleModelInterface
         return $this->read((int)$pid);
     }
 
+    /**
+     * @param array<string, mixed> $columns
+     */
     public function update(array $columns): bool
     {
         // hold the Dto rather than just its columns - the primary belongs in the
@@ -131,6 +140,8 @@ class RoleModel extends AclModel implements RoleModelInterface
         return $this->sql->rowCount() > 0;
     }
 
+    /**
+     */
     public function read(string|int $key): RoleEntityInterface
     {
         $column = (is_string($key)) ? 'name' : 'id';
@@ -146,6 +157,9 @@ class RoleModel extends AclModel implements RoleModelInterface
         return $roleEntity;
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function readAll(): array
     {
         // the fetch mode set by read() persists on the Sql instance - reset
@@ -177,6 +191,8 @@ class RoleModel extends AclModel implements RoleModelInterface
     /**
      * Replace the role's permissions with exactly $permissionIds - atomically;
      * a failure rolls the whole relink back and rethrows.
+     *
+     * @param array<array-key, int|string> $permissionIds
      */
     public function relink(int $roleId, array $permissionIds): bool
     {

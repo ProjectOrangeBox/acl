@@ -27,6 +27,9 @@ class User extends Singleton implements UserInterface
     protected string $sessionKey;
     protected int $guestUserId;
 
+    /**
+     * @param array<string, mixed> $config
+     */
     protected function __construct(array $config, protected AclInterface $acl, protected SessionInterface $sessionService)
     {
         $this->config = $this->mergeConfigWith($config);

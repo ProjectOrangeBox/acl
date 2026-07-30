@@ -29,6 +29,9 @@ class Acl extends Singleton implements AclInterface
     public RoleModel $roleModel;
     public PermissionModel $permissionModel;
 
+    /**
+     * @param array<string, mixed> $config
+     */
     protected function __construct(array $config, PDO $pdo)
     {
         $config = $this->mergeConfigWith($config);
@@ -60,9 +63,30 @@ class Acl extends Singleton implements AclInterface
             }
         }
 
-        $this->userModel = new $config['userModel']($config, $pdo);
-        $this->roleModel = new $config['roleModel']($config, $pdo);
-        $this->permissionModel = new $config['permissionModel']($config, $pdo);
+        // the interface check above is the documented contract, but this class
+        // also reaches for $model->acl, which the interfaces do not declare -
+        // so a class implementing the interface without extending the concrete
+        // model already died here with a TypeError about a property assignment.
+        // Say what is actually required instead.
+        $userModel = new $config['userModel']($config, $pdo);
+        $roleModel = new $config['roleModel']($config, $pdo);
+        $permissionModel = new $config['permissionModel']($config, $pdo);
+
+        if (!$userModel instanceof UserModel) {
+            throw new InvalidArgumentException('Config "userModel" must be a class extending ' . UserModel::class);
+        }
+
+        if (!$roleModel instanceof RoleModel) {
+            throw new InvalidArgumentException('Config "roleModel" must be a class extending ' . RoleModel::class);
+        }
+
+        if (!$permissionModel instanceof PermissionModel) {
+            throw new InvalidArgumentException('Config "permissionModel" must be a class extending ' . PermissionModel::class);
+        }
+
+        $this->userModel = $userModel;
+        $this->roleModel = $roleModel;
+        $this->permissionModel = $permissionModel;
 
         // the models resolve string role/permission arguments back through
         // this facade - without this wiring those lookups would fail on an
@@ -77,6 +101,8 @@ class Acl extends Singleton implements AclInterface
      * create will throw DtoValidationFailed on fail - carrying the offending
      * fields keyed by name, from the operation's Dto or from the model's
      * uniqueness check, which report identically
+     *
+     * @param array<string, mixed> $fields
      */
     public function createUser(string $username, string $email, string $password, array $fields = []): UserEntityInterface
     {

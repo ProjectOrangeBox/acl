@@ -10,6 +10,9 @@ use orange\acl\interfaces\PermissionEntityInterface;
 
 interface AclInterface
 {
+    /**
+     * @param array<string, mixed> $fields
+     */
     public function createUser(string $username, string $email, string $password, array $fields = []): UserEntityInterface;
     public function getUser(int $userId): UserEntityInterface;
 

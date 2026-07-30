@@ -21,6 +21,9 @@ class PermissionEntity implements PermissionEntityInterface
     // if the permission is active or not
     public protected(set) int $is_active;
 
+    /**
+     * @param array<string, mixed> $config
+     */
     public function __construct(protected array $config, protected PermissionModelInterface $permissionModel)
     {
     }

@@ -28,9 +28,21 @@ interface UserEntityInterface
     /* access */
     public function can(string $permission): bool;
     public function hasRole(int|string $role): bool;
+    /**
+     * @param array<array-key, string> $roles
+     */
     public function hasRoles(array $roles): bool;
+    /**
+     * @param array<array-key, string> $roles
+     */
     public function hasOneRoleOf(array $roles): bool;
+    /**
+     * @param array<array-key, string> $permissions
+     */
     public function hasPermissions(array $permissions): bool;
+    /**
+     * @param array<array-key, string> $permissions
+     */
     public function hasOnePermissionOf(array $permissions): bool;
     public function hasPermission(string $permission): bool;
     public function cannot(string $permission): bool;

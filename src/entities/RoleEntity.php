@@ -20,6 +20,9 @@ class RoleEntity implements RoleEntityInterface
     // if the role is active or not
     public protected(set) int $is_active;
 
+    /**
+     * @param array<string, mixed> $config
+     */
     public function __construct(protected array $config, protected RoleModelInterface $roleModel)
     {
     }

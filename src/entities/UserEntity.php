@@ -26,8 +26,11 @@ class UserEntity implements UserEntityInterface
     // hash must never be readable from outside the entity hierarchy
     protected string $password;
 
+    /** @var array<array-key, string> */
     protected array $permissions = [];
+    /** @var array<array-key, string> */
     protected array $roles = [];
+    /** @var array<string, mixed> */
     protected array $meta = [];
 
     protected bool $lazyLoaded = false;
@@ -37,6 +40,9 @@ class UserEntity implements UserEntityInterface
     // "ready to use"
     protected bool $hydrated = false;
 
+    /**
+     * @param array<string, mixed> $config
+     */
     public function __construct(protected array $config, protected UserModelInterface $userModel)
     {
         $this->hydrated = true;
@@ -103,21 +109,33 @@ class UserEntity implements UserEntityInterface
         return in_array($role, $this->roles, true);
     }
 
+    /**
+     * @param array<array-key, string> $roles
+     */
     public function hasRoles(array $roles): bool
     {
         return array_all($roles, fn($r) => $this->hasRole($r));
     }
 
+    /**
+     * @param array<array-key, string> $roles
+     */
     public function hasOneRoleOf(array $roles): bool
     {
         return array_any($roles, fn($r) => $this->hasRole($r));
     }
 
+    /**
+     * @param array<array-key, string> $permissions
+     */
     public function hasPermissions(array $permissions): bool
     {
         return array_all($permissions, fn($p) => !$this->cannot($p));
     }
 
+    /**
+     * @param array<array-key, string> $permissions
+     */
     public function hasOnePermissionOf(array $permissions): bool
     {
         return array_any($permissions, fn($p) => $this->can($p));

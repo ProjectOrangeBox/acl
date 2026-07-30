@@ -23,8 +23,8 @@ use orange\acl\interfaces\ModelInterface;
  *
  * UserModel owns this model entirely; nothing else is expected to call it.
  *
- * @method static static getInstance(array $config, PDO $pdo)
- * @method static static newInstance(array $config, PDO $pdo)
+ * @method static static getInstance(array<string, mixed> $config, PDO $pdo)
+ * @method static static newInstance(array<string, mixed> $config, PDO $pdo)
  */
 class UserMetaModel extends AclModel implements ModelInterface
 {
@@ -38,6 +38,9 @@ class UserMetaModel extends AclModel implements ModelInterface
         'delete' => DeleteUserDto::class,
     ];
 
+    /**
+     * @param array<string, mixed> $config
+     */
     public function __construct(array $config, PDO $pdo)
     {
         parent::__construct($config, $pdo);
@@ -93,6 +96,8 @@ class UserMetaModel extends AclModel implements ModelInterface
     /**
      * A user without a meta row (seeded outside createUser(), say) is not an
      * error - meta is optional by design, so absence reads as [].
+     *
+     * @return array<array-key, mixed>
      */
     public function read(int $id): array
     {

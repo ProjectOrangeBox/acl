@@ -18,8 +18,8 @@ use orange\model\exceptions\DtoValidationFailed;
  * already taken" has nowhere to live inside one and belongs to the model, which
  * does have the connection.
  *
- * @method static static getInstance(array $config, PDO $pdo)
- * @method static static newInstance(array $config, PDO $pdo)
+ * @method static static getInstance(array<string, mixed> $config, PDO $pdo)
+ * @method static static newInstance(array<string, mixed> $config, PDO $pdo)
  */
 abstract class AclModel extends DtoModel
 {
