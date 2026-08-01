@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use orange\acl\Acl;
 use orange\acl\User;
+use orange\acl\exceptions\RecordNotFoundException;
 use orange\session\SessionInterface;
 
 /**
@@ -346,6 +347,31 @@ final class UserHelperTest extends unitTestHelper
         $this->expectException(\orange\framework\exceptions\MissingRequired::class);
 
         User::newInstance(['guest user' => 'nope'], $this->acl, $this->session);
+    }
+
+    /**
+     * A configured guest id pointing at no row is a setup problem, and every
+     * request without a login walks into it.
+     *
+     * load() catches RecordNotFoundException to fall back to guest, so when the
+     * guest itself is absent the fallback threw the same exception straight out
+     * again - reported as bare 'User Record 2', which reads like a stale session
+     * and sends you into the session code. It says what is missing now.
+     */
+    public function testMissingGuestUserRowSaysWhatIsWrong(): void
+    {
+        $orphaned = User::newInstance(['guest user' => 987], $this->acl, $this->session);
+
+        try {
+            $orphaned->load();
+
+            $this->fail('Expected a missing guest row to throw');
+        } catch (\orange\framework\exceptions\MissingRequired $e) {
+            $this->assertStringContainsString('987', $e->getMessage());
+            $this->assertStringContainsString('seed.sql', $e->getMessage());
+            // the cause is kept so the original lookup failure is still visible
+            $this->assertInstanceOf(RecordNotFoundException::class, $e->getPrevious());
+        }
     }
 
     public function testChangeRegeneratesTheSessionId(): void

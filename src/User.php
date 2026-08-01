@@ -70,9 +70,26 @@ class User extends Singleton implements UserInterface
             // is not an error - drop back to the guest user and reset the session
             $this->save($this->guestUserId);
 
-            return $this->acl->getUser($this->guestUserId);
+            try {
+                return $this->acl->getUser($this->guestUserId);
+            } catch (RecordNotFoundException $e) {
+                // The fallback itself is missing, which is a setup problem
+                // rather than a stale session - and every anonymous request
+                // hits it. Rethrown naming what is absent and which config
+                // value points at it, because "User Record 2" on its own sends
+                // you looking through the session code instead of the seed.
+                throw new MissingRequired(
+                    'guest user row (id ' . $this->guestUserId . '). '
+                    . 'Every request without a login resolves to it, so it has to exist. '
+                    . "Seed it - see the package's support/seed.sql - or point 'guest user' "
+                    . 'in config/user.php at a row that does.',
+                    $e->getCode(),
+                    $e
+                );
+            }
         }
     }
+
 
     /**
      * Whether an account may still act as the session's identity.
