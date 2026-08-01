@@ -9,6 +9,25 @@ use orange\acl\interfaces\RoleEntityInterface;
 interface UserEntityInterface
 {
     /**
+     * Identity. UserEntity has always declared these as real properties; they
+     * were simply missing from this interface, so anything typed against the
+     * interface - which is what a consumer should type against - could not read
+     * an id or a username without PHPStan calling it an undefined property.
+     *
+     * id is read-only from outside: it is the database's to assign, and the
+     * entity declares it protected(set).
+     */
+    public int $id { get; }
+    public string $username {
+        get;
+        set;
+    }
+    public string $email {
+        get;
+        set;
+    }
+
+    /**
      * Account state, readable but not writable from outside the entity - the
      * session-aware {@see \orange\acl\User} helper reads these to decide whether
      * a stored session still names a usable account. Changing them goes through
