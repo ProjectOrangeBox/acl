@@ -4,6 +4,23 @@ MySQL/InnoDB DDL for the six tables `orange/acl` reads and writes. The names are
 fixed — they are constants on `orange\acl\dtos\AclTables`, not configuration; see
 the package README for what using different ones takes.
 
+## If your application uses phinx, use the migration instead
+
+`install/database/migrations/20260801000001_create_acl_tables.php` builds the
+same six tables as a phinx migration, and
+
+```sh
+vendor/bin/installModule orange/acl
+```
+
+copies it — plus the guest-user seeder — into your `database/` directory. Prefer
+that: an application that migrates gets these tables recorded in `phinxlog` and
+can take an incremental change later, which a database loaded from raw DDL
+cannot.
+
+These `.sql` files are for an application that does not migrate. **The two are
+one schema in two renderings — a change to either has to be made to both.**
+
 ## Load order matters
 
 The join tables carry foreign keys, so the tables they point at have to exist
